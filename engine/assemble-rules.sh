@@ -12,11 +12,14 @@
 #
 # Conditions reconnues : MULTIPOSTE MULTIDOMAINE LIVRABLE CONFIDENTIEL PROXY
 #                        SUPERVISION CODE_RELU SOLLICITATIONS RIGUEUR_AFFICHEE CONCISION
+#                        BILAN_DEMARRAGE REGLES_A_FROID DOCS_SUR_DEMANDE
 # Les autres sont tenues pour vraies et n'ont pas de marqueur dans le gabarit.
+# BILAN_DEMARRAGE n'a pas de bloc dans le gabarit : elle gouverne la consigne de démarrage,
+# que boot-check.sh lit dans config/CONDITIONS — sa présence dans la liste suffit.
 # =============================================================================
 set -uo pipefail
 
-CONNUES="MULTIPOSTE MULTIDOMAINE LIVRABLE CONFIDENTIEL PROXY SUPERVISION CODE_RELU SOLLICITATIONS RIGUEUR_AFFICHEE CONCISION"
+CONNUES="MULTIPOSTE MULTIDOMAINE LIVRABLE CONFIDENTIEL PROXY SUPERVISION CODE_RELU SOLLICITATIONS RIGUEUR_AFFICHEE CONCISION BILAN_DEMARRAGE REGLES_A_FROID DOCS_SUR_DEMANDE"
 VRAIES=""
 CIBLE="$HOME/.claude"
 ESSAI=0
@@ -43,6 +46,38 @@ est_vraie() {
     for x in "${_v[@]}"; do [ "$x" = "$c" ] && return 0; done
     return 1
 }
+
+# --- PROXY n'est pas une réponse d'entretien : c'est un fait de machine ------
+# Le catalogue promettait « détectée par le script d'installation » sans que rien ne
+# l'écrive : au moment de taper la liste, le modèle devait se SOUVENIR que l'outil était
+# là, et son oubli retirait la compétence de dépannage d'un outil que l'installation
+# venait de poser — en silence, par conception. install.sh écrit désormais le résultat
+# dans config/PROXY, « oui » ou « non » — « non » quand l'installation a ÉCHOUÉ est le
+# cas qui compte : une trace qui ne sait dire que « oui » ne détecte rien. On la lit ici,
+# résolue depuis l'emplacement du SCRIPT comme le fichier des conditions ; à défaut de
+# trace (installation antérieure au mécanisme), on sonde l'outil lui-même. LA DÉTECTION
+# FAIT FOI DANS LES DEUX SENS : la liste tapée n'ajoute ni ne conserve PROXY — c'est
+# précisément le trajet par la mémoire d'un modèle qu'on ferme.
+_PROXY_TRACE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config/PROXY"
+if [ -f "$_PROXY_TRACE" ]; then
+    _proxy="$(grep -v '^#' "$_PROXY_TRACE" | grep -m1 . || true)"
+    _proxy_src="trace d'installation"
+else
+    if command -v rtk >/dev/null 2>&1; then _proxy="oui"; else _proxy="non"; fi
+    _proxy_src="sonde directe, trace absente"
+fi
+if [ "$_proxy" = "oui" ]; then
+    est_vraie PROXY || _v+=("PROXY")
+    echo "[assemble] PROXY : vraie ($_proxy_src)"
+else
+    if est_vraie PROXY; then
+        _nv=(); for x in "${_v[@]}"; do [ "$x" = "PROXY" ] || _nv+=("$x"); done; _v=("${_nv[@]}")
+        echo "[assemble] PROXY : retirée de la liste — l'outil n'est pas là ($_proxy_src)"
+    else
+        echo "[assemble] PROXY : fausse ($_proxy_src)"
+    fi
+fi
+VRAIES="$(IFS=,; echo "${_v[*]}")"
 
 # LES RÉPONSES SONT ÉCRITES, et pas seulement consommées. Jusqu'ici elles arrivaient par
 # drapeau, servaient à retirer des blocs, et disparaissaient — donc plus rien, ensuite, ne
@@ -120,8 +155,13 @@ while IFS= read -r ligne; do
 done < "$REGLEMENT"
 [ "$SUPPRIME" = 1 ] && { echo "[assemble] ERREUR : un bloc conditionnel n'est pas fermé dans le gabarit." >&2; rm -f "$TMP"; exit 2; }
 
-# Le bloc de consigne destiné à l'assemblage n'a plus lieu d'être une fois assemblé.
-sed -i '/WIZARD : ce fichier est assemblé/,/L.OSSATURE DES SECTIONS NE CHANGE PAS/d' "$TMP"
+# Les notes de consigne destinées à l'assemblage et au grill n'ont plus lieu d'être une
+# fois assemblé — TOUTES : celle de l'en-tête, celle du bloc persona, celle de la table de
+# routage. Une première version ne retirait que la première, et les deux autres restaient
+# dans le fichier payé à chaque session (relevé d'audit du 2026-08-14). Le retrait est
+# générique — toute note `<!-- WIZARD … -->`, sur une ou plusieurs lignes — pour qu'une
+# note ajoutée demain au gabarit n'exige pas de revenir ici.
+sed -i -e '/<!-- WIZARD.*-->/d' -e '/<!-- WIZARD/,/-->/d' "$TMP"
 sed -i '/^> `$/d' "$TMP"
 
 mv "$TMP" "$REGLEMENT"
@@ -166,11 +206,12 @@ echo "[assemble] Blocs conservés   : $GARDES"
 echo "[assemble] Blocs retirés     :${RETIRES:- aucun}"
 echo "[assemble] Compétences retirées :${COMPETENCES_RETIREES:- aucune}"
 
-# Garde de dernier ressort : aucun marqueur ne doit survivre. Un marqueur resté en
-# place signale un bloc ni retiré ni ouvert, donc un assemblage à moitié fait.
-if grep -q "<!-- CONDITION\|<!-- FIN" "$REGLEMENT"; then
-    echo "[assemble] ⛔ des marqueurs subsistent dans le règlement — assemblage incomplet." >&2
-    grep -n "<!-- CONDITION\|<!-- FIN" "$REGLEMENT" >&2
+# Garde de dernier ressort : aucun marqueur NI AUCUNE NOTE WIZARD ne doit survivre. Un
+# marqueur resté en place signale un bloc ni retiré ni ouvert, une note restée signale un
+# retrait qui n'a pas eu lieu — dans les deux cas, un assemblage à moitié fait.
+if grep -q "<!-- CONDITION\|<!-- FIN\|<!-- WIZARD" "$REGLEMENT"; then
+    echo "[assemble] ⛔ des marqueurs ou des notes d'assemblage subsistent dans le règlement — assemblage incomplet." >&2
+    grep -n "<!-- CONDITION\|<!-- FIN\|<!-- WIZARD" "$REGLEMENT" >&2
     exit 1
 fi
 echo "[assemble] ✅ aucun marqueur résiduel."

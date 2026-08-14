@@ -18,6 +18,17 @@ source "$REPO/config.sh"          # claudeos_ws_roots (étape 3) — manifeste, 
 done_n=0
 did() { echo "  ✚ $1"; done_n=$((done_n+1)); }
 
+# Réponses de l'entretien d'installation (engine/config/CONDITIONS, écrit par
+# assemble-rules.sh) — même patron que selftest.sh : une étape qui pose une fonction
+# DÉCLINÉE à l'entretien la reposerait à chaque synchronisation, indéfiniment, et rien
+# ne le dirait. Fichier absent = toutes les conditions vraies : une installation sans
+# entretien — celle de l'auteur comprise — garde le comportement d'avant.
+_CONDITIONS="$REPO/config/CONDITIONS"
+condition_vraie() {
+    [ -f "$_CONDITIONS" ] || return 0
+    grep -qx -- "$1" "$_CONDITIONS" 2>/dev/null
+}
+
 # 1. Ligne d'amorçage du wrapper de démarrage dans ~/.bashrc (local, instantané).
 # Le mot « bannière » est tombé le 2026-08-09 avec la bannière : ce que `~/.bashrc` doit
 # sourcer est le WRAPPER, qui injecte le prompt de bilan au lancement d'un terminal.
@@ -54,6 +65,13 @@ fi
 # Les racines balayées viennent du MANIFESTE depuis le 2026-08-09 (claudeos_ws_roots), plus
 # de `$HOME/workstations` en dur : une workstation déclarée ailleurs recevait sinon la
 # sauvegarde sans jamais recevoir ses réceptacles, et rien n'échouait.
+# Étape conditionnée sur la réponse de l'entretien : les réceptacles sont la moitié
+# machine de la fonction CONFIDENTIEL — qui a répondu ne pas manipuler de documents non
+# versionnables ne doit pas se les voir reposer à chaque synchronisation. Sauté, et DIT :
+# une étape silencieusement absente est indistinguable d'une étape oubliée.
+if ! condition_vraie CONFIDENTIEL; then
+    echo "  ⏭  réceptacles _IGNORE/ non posés : la condition CONFIDENTIEL est fausse dans $_CONDITIONS"
+else
 _ign_n=0
 while IFS= read -r _root; do
     [ -d "$_root" ] || continue
@@ -62,6 +80,7 @@ while IFS= read -r _root; do
     done < <(find "$_root" -mindepth 1 -maxdepth 1 -type d -not -name "_IGNORE" 2>/dev/null)
 done < <(claudeos_ws_roots)
 [ "$_ign_n" -gt 0 ] && did "$_ign_n réceptacle(s) _IGNORE/ créé(s) à la racine des projets"
+fi
 
 
 

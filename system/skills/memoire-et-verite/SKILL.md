@@ -36,5 +36,5 @@ description: Écrire un fait, un statut ou une décision, ou toucher une source 
 
 - Uniquement des règles. Jamais de narratif, de résumé ni d'explication.
 - **Pas d'audit après modification** : supprimé avec le reste de la cérémonie. Une règle modifiée entre en vigueur telle quelle ; l'audit hebdomadaire du système la relira. Motif de la suppression : chaque correctif déclenchait un nouvel audit, qui produisait un correctif, sans terme.
-- **Une règle n'entre que si une autre sort.** Le règlement et ses fiches ont grossi de tous les incidents et n'ont jamais rendu une ligne. À l'ajout, nommer ce qui sort — ou dire pourquoi rien ne peut sortir.
+- **Le troc — une règle n'entre que si une autre sort — vit dans `CLAUDE.md` §1, qui en est la source.** Ne pas le recopier ici : l'appliquer à l'ajout — c'est par une copie de ce genre qu'une fiche a déjà affirmé une règle que le règlement avait abandonnée.
 - Les `MEMORY.md` ne sont pas relus au fil de l'eau : l'hygiène des mémoires est due à la passe hebdomadaire.

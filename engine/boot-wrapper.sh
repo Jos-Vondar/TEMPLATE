@@ -15,7 +15,19 @@ claude() {
         *" -p "*|*" --print "*) command claude "$@"; return ;;
     esac
     # Lancement interactif sans argument : injecter le prompt de bilan.
+    # SAUF si le bilan de démarrage a été décliné à l'entretien. Sans cette garde, la
+    # personne qui l'a décliné pose malgré elle une question à laquelle la consigne
+    # injectée interdit de répondre par un bilan : elle voit sa propre question rester
+    # sans réponse dès la première seconde d'usage. Fichier de conditions ABSENT =
+    # toutes vraies, donc une installation sans entretien garde le comportement d'avant.
     if [ $# -eq 0 ] && [ -t 1 ]; then
+        _cnd="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config/CONDITIONS"
+        if [ -f "$_cnd" ] && ! grep -qx 'BILAN_DEMARRAGE' "$_cnd"; then
+            unset _cnd
+            command claude
+            return
+        fi
+        unset _cnd
         command claude "tu es à jour ?"
         return
     fi

@@ -30,13 +30,9 @@ Due une fois par semaine ; le démarrage la signale au-delà de sept jours. Elle
 
 Ce que cette fiche-ci porte, et qu'`os-audit` ne dit pas : rien n'est fait à la clôture, donc **ce qui n'est pas fait à la passe n'est fait nulle part**. Une passe sautée n'est pas un retard de rangement, c'est une semaine sans vérification.
 
-### Cool-down des règles — une règle candidate refroidit avant d'entrer
+### Cool-down des règles — la promotion se fait ici *(énoncé remonté au règlement)*
 
-**Une règle candidate née en séance ne s'écrit plus à chaud.** Elle va dans `<MÉMOIRE>/LEARNING_PROPOSALS.md`, et elle ne se promeut qu'ici, à la passe, **à froid** — au même moment où l'on pose la question « laquelle sort ». Vaut pour toute couche : règlement, compétence situationnelle, document de conception.
-
-Motif : une règle écrite dans la séance qui l'a inspirée est écrite sous l'impression de l'incident, jamais sous celle du corpus. C'est la pompe qui a produit l'usine à gaz dégonflée — quatre écritures par incident, aucune sortie. Le délai n'est pas une lourdeur administrative : c'est le seul moment où l'on voit la règle à côté de celles qui existent déjà.
-
-**Exception unique** : un **interdit** dont l'omission coûterait de l'irréversible avant la prochaine passe — une perte de données, un envoi à un tiers, une fuite. Celui-là s'écrit immédiatement. Une règle de conduite, une préférence de forme, une heuristique de jugement n'en relèvent jamais, quelle que soit l'évidence qu'elles paraissent avoir sur le moment.
+**L'énoncé — refroidissement et troc — vit dans `CLAUDE.md` §1, qui en est la source ; son motif vit au catalogue des règles. Ne recopier ni l'un ni l'autre ici.** Ce que cette fiche ajoute, et qui n'est qu'à elle : la promotion depuis `<MÉMOIRE>/LEARNING_PROPOSALS.md` se fait **ici, à la passe, à froid** — au même moment où se pose la question du troc, « laquelle sort ». Elle vaut pour toute couche : règlement, compétence situationnelle, document de conception. Et l'exception d'irréversibilité se lit strictement — une perte de données, un envoi à un tiers, une fuite ; une règle de conduite, une préférence de forme, une heuristique de jugement n'en relèvent jamais, quelle que soit leur évidence sur le moment. *(Un règlement qui ne porte pas ces règles les a déclinées à l'entretien — cette mécanique tombe alors avec elles.)*
 
 ## Proposition du jour
 

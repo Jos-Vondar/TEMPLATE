@@ -555,6 +555,21 @@ if command -v rtk >/dev/null 2>&1; then
     # installe une chose pendant que sa doctrine en prescrit une autre livre une
     # contradiction. Coût assumé : la version de l'outil pèse sur chaque session.
 fi
+# LA TRACE DE DÉTECTION, sans laquelle l'entretien ne peut que deviner. Le catalogue
+# promet « PROXY : détectée par le script d'installation » — mais le résultat ne
+# survivait nulle part : au moment d'assembler les règles, le modèle devait se SOUVENIR
+# que l'outil était là, et son oubli retirait la compétence de dépannage en silence.
+# Écrite dans les DEUX sens : « non » quand l'installation vient d'échouer est le cas qui
+# compte — une trace qui ne sait dire que « oui » ne détecte rien. Réécrite à chaque
+# passage de ce script, parce que c'est ici que le résultat est frais ; lue par
+# assemble-rules.sh, qui tranche PROXY sur elle et non sur une liste tapée de mémoire.
+mkdir -p "$DEPOT/engine/config"
+{
+    echo "# PROXY — résultat de la détection du proxy économe, écrit par install.sh."
+    echo "# Lu par assemble-rules.sh pour trancher la condition PROXY. « oui » = outil présent."
+    if command -v rtk >/dev/null 2>&1; then echo "oui"; else echo "non"; fi
+} > "$DEPOT/engine/config/PROXY"
+ok "détection consignée : $(tail -1 "$DEPOT/engine/config/PROXY") (engine/config/PROXY)"
 
 # --- 7bis. Premier commit ---------------------------------------------------
 # Un dépôt sans aucun commit est un état bâtard : plusieurs outils du moteur refusent d'y

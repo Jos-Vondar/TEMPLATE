@@ -35,7 +35,7 @@ Quatre questions, une à la fois, par l'outil de question et jamais en prose. Ch
 
 ### Les quatre questions de condition
 
-Elles décident quelles règles entrent. Poser les quatre, même si une réponse paraît évidente : c'est la personne qui répond, pas toi. Cinq autres questions de condition, sur la conduite de l'assistant, se posent en phase 3 — même mécanisme, autre sujet.
+Elles décident quelles règles entrent. Poser les quatre, même si une réponse paraît évidente : c'est la personne qui répond, pas toi. Huit autres questions de condition, sur la conduite de l'assistant, se posent en phase 3 — même mécanisme, autre sujet.
 
 | Question | Condition | Ce qu'elle fait entrer |
 | :--- | :--- | :--- |
@@ -44,7 +44,7 @@ Elles décident quelles règles entrent. Poser les quatre, même si une réponse
 | Produis-tu des documents destinés à d'autres que toi ? | `LIVRABLE` | La compétence des livrables, et la règle de bascule en ton neutre. |
 | Manipules-tu des documents que tu ne peux pas versionner ? | `CONFIDENTIEL` | Le réceptacle local et ses règles de suppression. |
 
-**Ce qui n'est pas demandé, et pourquoi.** La mémoire, la plomberie et le code sont tenus pour vrais : le moteur est livré et l'installation a posé ses hooks, donc « non » n'est pas une réponse possible. Le proxy économe est détecté par le script. **Les règles sur les secrets et le recontrôle des rapports d'agents ne sont jamais conditionnées** — quelqu'un qui répond « je ne manipule pas de secrets » et colle un jeton trois semaines plus tard n'aurait aucune règle au moment précis où l'absence de règle est définitive.
+**Ce qui n'est pas demandé, et pourquoi.** La mémoire, la plomberie et le code sont tenus pour vrais : le moteur est livré et l'installation a posé ses hooks, donc « non » n'est pas une réponse possible. Le proxy économe n'est ni demandé ni à retenir : l'installation a écrit le résultat de sa détection dans `~/.claudeos/engine/config/PROXY`, et c'est le script d'assemblage qui le lit — ne pas mettre `PROXY` dans la liste de la phase 4, et ne pas se fier à sa mémoire de ce que l'installation a fait. **Les règles sur les secrets et le recontrôle des rapports d'agents ne sont jamais conditionnées** — quelqu'un qui répond « je ne manipule pas de secrets » et colle un jeton trois semaines plus tard n'aurait aucune règle au moment précis où l'absence de règle est définitive.
 
 ### La profondeur des dossiers de travail — à demander avant la table
 
@@ -82,23 +82,26 @@ C'est ce fichier que les scripts lisent : le bilan de démarrage y prend le filt
 
 ## Phase 3 — Quel assistant tu veux
 
-### Les cinq questions de conduite — avant le grill
+### Les huit questions de conduite — avant le grill
 
 Comme les quatre de la phase 2, elles décident quelles règles entrent : leurs réponses rejoignent la liste `--vraies` de la phase 4. Les poser une à la fois, avec les mots ci-dessous — chacune décrit les deux régimes, et c'est sur eux que la personne choisit.
 
 | Question à poser, telle quelle | Condition | Vraie si |
 | :--- | :--- | :--- |
-| Quand l'assistant travaille sur tes fichiers, veux-tu qu'il t'annonce chaque changement avant de le faire et qu'il te rende la main aux étapes clés — ou qu'il avance seul et te rende compte à la fin ? | `SUPERVISION` | « qu'il annonce et rende la main » |
+| Quand l'assistant travaille sur tes fichiers, veux-tu qu'il t'annonce chaque changement avant de le faire et qu'il te rende la main aux étapes clés — ou qu'il avance seul et te rende compte à la fin ? C'est-à-dire, si tu réponds « avance seul » : plus d'explication avant de modifier un fichier, plus de demande avant de trancher ce qui s'inscrit dans une source de vérité, plus de choix proposé sur une décision d'architecture — il choisira seul et tu le découvriras après —, plus de paliers annoncés sur les gros chantiers, et plus de relais d'office des rappels et des fils ouverts en début de session : il faudra aller les chercher toi-même. Resteront dans tous les cas la confirmation avant l'irréversible, l'arrêt sur une intention ambiguë, et la dette de sécurité signalée. | `SUPERVISION` | « qu'il annonce et rende la main » |
 | Quand l'assistant a besoin d'une décision de ta part, préfères-tu qu'il s'arrête et te pose un choix explicite avec ses options — ou qu'il propose au fil du texte et continue ? | `SOLLICITATIONS` | « un choix explicite » |
 | Réponse courte — la conclusion et ce qui attend ta décision, le détail dans les fichiers — ou compte rendu complet du raisonnement dans la réponse ? | `CONCISION` | « réponse courte » |
 | Veux-tu que l'assistant marque explicitement le statut de ce qu'il affirme — vérifié, supposé, à confirmer — et dise sur quoi il a cherché quand il conclut qu'une chose n'existe pas ? Ou préfères-tu la réponse seule ? | `RIGUEUR_AFFICHEE` | « qu'il marque le statut » |
-| Ton code passe-t-il sous les yeux d'autres personnes — revue, pull request, équipe ? | `CODE_RELU` | oui |
+| Ton code passe-t-il sous les yeux d'autres personnes — revue, pull request, équipe ? Répondre non retire une seule règle : le résumé des décisions retenues avant tout commit qui n'est pas une sauvegarde de routine — l'assistant committera alors sans récapituler ses choix. | `CODE_RELU` | oui |
+| Au démarrage de chaque session, veux-tu que l'assistant ouvre sa première réponse par un bilan — poste à jour ou non, tableau d'état, dernière session, rappels et fils ouverts, puis une proposition de travail pour aujourd'hui ? Ou qu'il réponde directement à ta demande — c'est-à-dire : plus d'état des lieux à l'ouverture, plus de proposition de travail, plus de relais des rappels ni des fils ouverts, il faudra aller les chercher toi-même ; seule la dette de sécurité restera signalée dans tous les cas ? | `BILAN_DEMARRAGE` | « le bilan » |
+| Quand tu édictes une règle en pleine session — « désormais, fais X » —, veux-tu qu'elle s'applique et s'écrive immédiatement — ou qu'elle refroidisse : classée au registre des propositions, promue à la passe hebdomadaire seulement, et une règle n'entre que si une autre sort ? Concrètement, avec le refroidissement, tu dis « désormais, fais X » et l'assistant classe la demande au lieu de l'appliquer sur-le-champ — seul un interdit qui prévient de l'irréversible s'écrit à chaud. | `REGLES_A_FROID` | « qu'elle refroidisse » |
+| Veux-tu que l'assistant ne crée jamais de fichier de documentation ou de README sans que tu l'aies demandé ? Répondre non l'autorise à créer de lui-même des README et des documents d'explication partout où il juge utile. | `DOCS_SUR_DEMANDE` | « jamais sans demande » |
 
-Ce que chaque « non » retire est écrit dans `RULES_CATALOG.md`, condition par condition. Deux gardes ne dépendent d'aucune de ces réponses : **le relais de la dette de sécurité au démarrage** reste même quand `SUPERVISION` est fausse — avancer seul n'est pas cesser d'être averti qu'un secret traîne à régénérer —, et **la discipline de varier les motifs d'une recherche** reste même quand `RIGUEUR_AFFICHEE` est fausse — c'est son affichage qui devient optionnel, pas elle.
+Ce que chaque « non » retire est écrit dans `RULES_CATALOG.md`, condition par condition. La question du bilan se pose sans l'orienter mais sans rien cacher de son coût : ce bilan est le cœur de ce que le système ajoute à l'outil nu, et quelqu'un qui répond « non » doit savoir ce qu'il décline — la question ci-dessus le dit, la poser telle quelle. Trois gardes ne dépendent d'aucune de ces réponses : **le relais de la dette de sécurité au démarrage** reste même quand `SUPERVISION` ou `BILAN_DEMARRAGE` est fausse — avancer seul ou décliner le bilan n'est pas cesser d'être averti qu'un secret traîne à régénérer —, **la discipline de varier les motifs d'une recherche** reste même quand `RIGUEUR_AFFICHEE` est fausse — c'est son affichage qui devient optionnel, pas elle —, et **l'arrêt sur une tâche ambiguë sur l'intention** reste même quand `SUPERVISION` et `SOLLICITATIONS` sont fausses : « avance seul » suppose de savoir *quoi* faire, cet arrêt fournit le quoi et ne surveille pas le comment, et `SOLLICITATIONS` règle la forme de la question, jamais son existence.
 
 ### Le grill de persona
 
-Invoquer la compétence de grill. Douze rubriques, dont les énoncés génériques sont déjà dans le fichier de règles ; l'entretien remplit le réglage de chacune.
+Invoquer la compétence de grill. Douze rubriques, dont les énoncés génériques sont déjà dans le bloc persona du fichier de règles (onze si `LIVRABLE` est fausse — « Périmètre du caractère » part avec elle) : identité, contradiction, ni complaisance ni opposition systématique, proactivité d'options, anticipation, pédagogie, franchise, pushback, mise en cause d'un objectif, périmètre du caractère, humour, forme de la voix. Chacune porte une marque *(réglage : à remplir)* : l'entretien passe les rubriques une à une et remplace chaque marque par le réglage retenu — **aucune marque ne doit survivre au grill**, et l'autotest avertit tant qu'il en reste une. Si la personne sèche sur une rubrique, `RULES_CATALOG.md` (section E) porte pour plusieurs d'entre elles l'exemple du réglage de l'auteur : le montrer comme illustration, jamais l'écrire comme défaut — une rubrique laissée à l'exemple n'a pas été réglée.
 
 Ne pas expédier cette phase : c'est la seule qui produise quelque chose qui n'existe nulle part ailleurs. Les règles, on peut les relire ; un persona mal réglé se subit sans savoir pourquoi.
 
@@ -114,9 +117,9 @@ Il est livré en **gabarit**, avec les règles conditionnelles entre marqueurs. 
 bash ~/.claudeos/engine/assemble-rules.sh --vraies MULTIDOMAINE,CONFIDENTIEL,SUPERVISION,SOLLICITATIONS
 ```
 
-La liste ne contient que les conditions **vraies**, séparées par des virgules, éventuellement vide — les quatre questions de la phase 2 **et les cinq de la phase 3** y répondent chacune par sa présence ou son absence ; une réponse non transmise serait tenue pour fausse et retirerait des règles voulues. Le script :
+La liste ne contient que les conditions **vraies**, séparées par des virgules, éventuellement vide — les quatre questions de la phase 2 **et les huit de la phase 3** y répondent chacune par sa présence ou son absence ; une réponse non transmise serait tenue pour fausse et retirerait des règles voulues — dont le bilan de démarrage : `BILAN_DEMARRAGE` n'a pas de bloc dans le gabarit, c'est la plomberie de démarrage qui la lit dans le fichier des conditions que ce script écrit. `PROXY` ne s'y met pas : le script la tranche lui-même sur la trace d'installation (`engine/config/PROXY`), dans les deux sens, et le dit dans son compte rendu. Le script :
 
-- retire les blocs dont la condition est fausse, et **les marqueurs des blocs conservés** ;
+- retire les blocs dont la condition est fausse, et **les marqueurs des blocs conservés** — les notes d'assemblage du gabarit partent avec eux ;
 - retire les compétences devenues sans objet **et leur ligne de déclencheur ensemble** — une ligne de déclencheur sans compétence envoie vers le vide, une compétence hors de la carte de rappel a perdu son déclencheur visible, ce sont les deux moitiés du même défaut ;
 - refuse une condition inconnue plutôt que de l'ignorer, parce qu'une faute de frappe retirerait en silence le bloc qu'on voulait garder ;
 - vérifie qu'aucun marqueur ne subsiste, et échoue s'il en reste.
@@ -141,7 +144,7 @@ Ne jamais le relancer pour faire taire une alarme : une alarme qui sonne demande
 bash ~/.claudeos/engine/selftest.sh
 ```
 
-Il vérifie notamment que les compétences présentes et la carte de rappel se répondent, et que tout chemin cité par une règle existe. C'est le contrôle qui attrape ce que l'assemblage a pu casser.
+Il vérifie notamment que les compétences présentes et la carte de rappel se répondent, et que tout chemin cité par une règle existe. C'est le contrôle qui attrape ce que l'assemblage a pu casser. Il **avertit** aussi — sans bloquer — tant que le règlement porte encore une marque de gabarit : une rubrique de persona à *(réglage : à remplir)*, une table de routage non remplie. Cet avertissement qui persiste après l'entretien dit qu'une phase a été sautée.
 
 ## Phase 5 — La preuve
 

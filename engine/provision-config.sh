@@ -77,3 +77,23 @@ else
     # Pas de verrou = installation en cours, install.sh l'écrira complet juste après.
     echo "[provision] verrou : absent — install.sh le crée avec ses lignes à jour"
 fi
+
+# --- 3. La trace de détection du proxy économe -------------------------------
+# Lue par assemble-rules.sh pour trancher la condition PROXY sans compter sur la mémoire
+# d'un modèle. install.sh l'écrit à l'étape du proxy et la RÉÉCRIT à chaque passage —
+# c'est lui l'autorité, au moment où le résultat est frais. Une installation antérieure
+# au mécanisme n'en a pas : on la crée ici par sonde directe, pour que rejouer
+# l'entretien après une mise à jour lise un fait et non une devinette. Créée seulement
+# si absente — la loi du script — et donc jamais en travers d'install.sh, qui passe
+# après ce script et écrase avec le résultat de son installation.
+PRX="$CONF/PROXY"
+if [ -f "$PRX" ]; then
+    echo "[provision] trace proxy : déjà en place"
+else
+    {
+        echo "# PROXY — résultat de la détection du proxy économe (install.sh, sinon provision-config.sh)."
+        echo "# Lu par assemble-rules.sh pour trancher la condition PROXY. « oui » = outil présent."
+        if command -v rtk >/dev/null 2>&1; then echo "oui"; else echo "non"; fi
+    } > "$PRX"
+    echo "[provision] trace proxy : écrite — $(tail -1 "$PRX")"
+fi

@@ -559,8 +559,16 @@ while read -r _n; do
         || { ko "compétence citée par une instruction mais absente du disque : $_n"; _rt=1; }
 done < <(grep -rhoE 'compétences? `[a-z][a-z0-9-]+`' \
              "$_CMD" "$HOME/.claude/DESIGN.md" "$HOME/.claude/HANDOFF.md" "$HOME/.claude/MEMORY.md" \
+             "$HOME/.claude/RULES_CATALOG.md" \
              "$HOME/.claude/skills"/*/SKILL.md "$HOME/.claude/skills"/*/*.md "$HOME/.claude/agents"/*.md 2>/dev/null \
            | grep -oE '`[a-z][a-z0-9-]+`' | tr -d '`' | sort -u)
+# RULES_CATALOG.md est entré au périmètre le 2026-08-14 : une entrée du catalogue avait
+# promis une compétence non livrée sans que rien ne crie — ce contrôle ne balayait pas le
+# catalogue. Il n'attrape que la forme « compétence `slug` » : une compétence désignée
+# SANS slug (« la compétence qui la porte ») reste invisible à tout motif sans crier faux
+# — cette classe-là se ferme à l'écriture, pas au contrôle. Chez l'auteur le fichier
+# n'existe plus dans ~/.claude (chaîne d'export gelée le 2026-08-09) : ligne inerte ici,
+# active chez tout destinataire, où le catalogue est livré à cet emplacement.
 # Le registre des ratés n'est exigé que si la règle qui l'alimente existe : elle est
 # retirée du règlement quand MULTIDOMAINE est fausse (rattaché le 2026-08-14, même
 # faute que celle corrigée au contrôle 10 — exiger ce qui a été décliné).
@@ -1449,6 +1457,31 @@ else:
     print(f"  ✅ toutes les sections de fils ouverts des reprises sont ratissées "
           f"({len(fichiers)} reprise(s) balayée(s))")
 PY
+
+echo "[selftest] 47. Personnalisation — le règlement porte-t-il encore des marques de gabarit ? (avertissement)"
+# POURQUOI CE CONTRÔLE EXISTE. Le squelette livre le règlement en gabarit : notes d'assemblage
+# `<!-- WIZARD -->`, table de routage et rubriques de persona marquées « à remplir ».
+# L'assemblage retire les blocs conditionnels, mais rien ne vérifiait que la PERSONNALISATION
+# avait eu lieu : quelqu'un pouvait vivre des mois avec douze rubriques génériques et une table
+# « *(à remplir)* » sans qu'aucun contrôle ne bronche (relevé d'audit du 2026-08-14). Chez
+# l'auteur, dont le règlement n'a jamais porté ces marques, ce contrôle est vert et muet.
+# AVERTISSEMENT, jamais ko : une dette de personnalisation n'est ni une perte irréversible, ni
+# une fuite, ni le désarmement silencieux d'une garde (critère de warn(), en tête de fichier) —
+# elle encombre, elle ne désactive rien, et bloquer la sauvegarde dessus ferait payer un
+# entretien remis à plus tard par la perte du travail du jour.
+_R47="$HOME/.claude/CLAUDE.md"
+if [ ! -f "$_R47" ]; then
+    warn "règlement introuvable ($_R47) — rien à contrôler ici, d'autres contrôles le diront"
+else
+    _m47="$(grep -n "<!-- WIZARD\|à remplir" "$_R47" | head -6)"
+    if [ -n "$_m47" ]; then
+        warn "le règlement porte encore des marques de gabarit — entretien non joué, ou persona/table de routage laissées en l'état :"
+        printf '%s\n' "$_m47" | sed 's/^/       /' >&2
+        echo "       Le remède est l'entretien d'installation (compétence claudeos-onboarding), pas la suppression des marques." >&2
+    else
+        ok "aucune marque de gabarit dans le règlement"
+    fi
+fi
 
 echo
 if [ "$FAIL" -eq 0 ]; then

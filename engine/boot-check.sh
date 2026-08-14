@@ -5,7 +5,10 @@
 # L'utilisateur décide.
 # UN SEUL MODE : émet le JSON `additionalContext` attendu par le hook SessionStart, donc
 # injecté dans le contexte du modèle et invisible à l'écran. C'est le MODÈLE qui rend le
-# bilan, en première réponse, poussé par la consigne cachée du bloc DIRECTIVE plus bas.
+# bilan, en première réponse, poussé par la consigne de démarrage du bloc DIRECTIVE plus
+# bas — une consigne technique injectée au contexte et qu'on n'affiche pas telle quelle,
+# pas une dissimulation. Elle est DÉCLINABLE à l'entretien d'installation (condition
+# BILAN_DEMARRAGE, bloc dédié plus bas) ; la dette de sécurité sort dans tous les cas.
 #
 # LA BANNIÈRE SHELL A ÉTÉ RETIRÉE le 2026-08-09. Un mode `--human` dessinait un bandeau
 # coloré dans le terminal ; son unique appelant était le wrapper `boot-wrapper.sh`, qui a cessé de
@@ -538,7 +541,9 @@ DASH_ROWS=$(build_dashboard)
 # =============================================================================
 # MODE JSON — contexte du hook SessionStart
 # =============================================================================
-# Consigne cachée : force le modèle à ouvrir sa 1re réponse par le bilan.
+# Consigne technique de démarrage — injectée au contexte, jamais affichée telle quelle :
+# elle fait ouvrir la 1re réponse par le bilan. Déclinable à l'entretien d'installation :
+# voir le bloc BILAN_DEMARRAGE plus bas, qui la retire avec le bilan qu'elle ordonne.
 DIRECTIVE="⟦CONSIGNE DE DÉMARRAGE — ne pas recopier telle quelle à l'écran⟧
 Question implicite de lancement : « tu es à jour ? »
 Ouvre ta TOUTE PREMIÈRE réponse par ce bilan, AVANT la demande de l'utilisateur, dans cet ordre :
@@ -584,6 +589,27 @@ ${THREADS:-(aucun fil ouvert consigné)}
 --- POUR ALLER PLUS LOIN ---
 Détail des sessions passées : ${MEM}/SESSION_JOURNAL.md
 Ne le lire que si l'utilisateur déclare un contexte de travail ou demande l'historique."
+
+# --- BILAN_DEMARRAGE : le bilan d'ouverture est déclinable à l'entretien (2026-08-14) ---
+# La réponse vit dans engine/config/CONDITIONS, écrite par assemble-rules.sh et résolue
+# depuis l'emplacement du SCRIPT. Fichier absent = toutes les conditions vraies, même
+# doctrine que l'autotest : un système installé sans entretien — l'auteur compris — garde
+# le bilan. Condition fausse : la consigne d'ouverture et le bilan ne partent pas, et avec
+# eux tout ce que la personne a explicitement décliné — tableau d'état, dernière session,
+# rappels, fils ouverts, proposition du jour, avertissements d'autotest.
+# UNE GARDE NE SE DÉCLINE PAS : la dette de sécurité sort dans tous les cas — un secret à
+# régénérer se signale même à qui a décliné le reste, et le règlement livré porte la même
+# règle hors de tout bloc conditionnel.
+_CONDS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config/CONDITIONS"
+if [ -f "$_CONDS" ] && ! grep -qx "BILAN_DEMARRAGE" "$_CONDS"; then
+    SEC_LINES="$(printf '%s\n' "$OUT" | grep '🔐' || true)"
+    CTX_FULL="=== ClaudeOS boot ===
+Bilan de démarrage décliné à l'installation : pas d'état des lieux d'ouverture, répondre directement à la demande."
+    [ -n "$SEC_LINES" ] && CTX_FULL="${CTX_FULL}
+
+--- DETTE DE SÉCURITÉ — à relayer dès la première réponse, dans tous les cas ---
+${SEC_LINES}"
+fi
 
 # --- Session de PROJET : contexte réduit (2026-08-12) ---------------------------
 # Une session lancée par session-open.sh porte `OS_SESSION_SCOPE=projet`. Sans la
