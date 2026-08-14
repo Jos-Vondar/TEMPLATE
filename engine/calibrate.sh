@@ -49,10 +49,25 @@ t = json.load(sys.stdin)["hookSpecificOutput"]["additionalContext"]
 t = re.sub(r"--- ALERTES ---.*?(?=--- )", "", t, flags=re.S)
 print(len(t))
 ' 2>/dev/null || echo 0)
+# ASSIETTE DÉPLACÉE le 2026-08-09 : les fiches sont devenues des compétences de
+# `~/.claude/skills/`. Le discriminant est INTRINSÈQUE au corps — chaque
+# règle situationnelle ouvre sur une ligne de citation « > Fiche situationnelle »,
+# formule conservée par la conversion, qui a déplacé les corps tels quels. Le motif est
+# ANCRÉ EN DÉBUT DE LIGNE : sans l'ancre, il attrapait aussi la compétence `os-audit`, qui
+# nomme cette formule en prose pour dire comment reconnaître une règle situationnelle —
+# l'assiette passait de 45 000 à 80 000 caractères et le seuil calibré dessus n'aurait
+# plus rien borné. Une liste de slugs écrite ici serait un inventaire recopié, et le
+# contrôle 25 de selftest.sh le refuse. Même mesure que celle lue par selftest.sh : les
+# deux doivent bouger ensemble, sinon le seuil calibré ne borne plus ce qui est mesuré.
 _sheets=$(python3 -c '
-import sys, glob
-print(sum(len(open(p, encoding="utf-8").read()) for p in sorted(glob.glob(sys.argv[1]))))
-' "$HOME/.claude/fiches/*.md" 2>/dev/null || echo 0)
+import sys, glob, re
+tot = 0
+for p in sorted(glob.glob(sys.argv[1])):
+    txt = open(p, encoding="utf-8").read()
+    if re.search(r"^> Fiche situationnelle", txt, re.M):
+        tot += len(txt)
+print(tot)
+' "$HOME/.claude/skills/*/SKILL.md" 2>/dev/null || echo 0)
 
 # Une mesure nulle n'est pas une petite mesure : c'est une mesure ratée. Écrire un
 # seuil dessus désarmerait l'alarme en silence, ce qui est exactement le mode de
@@ -69,7 +84,7 @@ L=$(marge "$_layer"); B=$(marge "$_boot"); S=$(marge "$_sheets")
 
 printf '[calibrate] couche par session : %s car. → seuil %s\n' "$_layer" "$L"
 printf '[calibrate] bilan de démarrage : %s car. → seuil %s\n' "$_boot" "$B"
-printf '[calibrate] corpus des fiches  : %s car. → seuil %s\n' "$_sheets" "$S"
+printf '[calibrate] corpus situationnel : %s car. → seuil %s\n' "$_sheets" "$S"
 
 [ "$ECRIRE" = 1 ] || { echo "[calibrate] --montrer : rien n'a été écrit."; exit 0; }
 
@@ -78,7 +93,15 @@ cat > "$SELF/config/SEUILS" <<SEUILS
 # Bornes des alarmes de dérive de poids. Écrit par calibrate.sh, lu par selftest.sh.
 # Mesure + 25 %. Ce ne sont pas des quotas : ils attrapent une réaccumulation
 # silencieuse, ils n'arbitrent aucune règle. Les relever est une décision.
-_LAYER_MAX=$L
+# Les guillemets obliques ci-dessous sont ÉCHAPPÉS et doivent le rester (corrigé le
+# 2026-08-09, au premier lancement réel de ce script) : le marqueur de ce document-ci n'est
+# pas protégé — il ne peut pas l'être, \$B et \$S doivent s'y substituer — donc une
+# substitution de commande y est ÉVALUÉE. Non échappés, ils faisaient chercher une commande
+# nommée \`_LAYER_MAX\`, ce qui écrivait une erreur sur la sortie d'erreur et déposait un
+# commentaire tronqué dans le fichier produit. Les seuils eux-mêmes étaient justes : le
+# défaut n'abîmait que la note qui les explique, et rien ne l'aurait signalé.
+# \`_LAYER_MAX\` n'est plus écrit depuis le 2026-08-07 : la couche n'a plus de plafond absolu,
+# et calibrer une valeur que rien ne lit fabrique un contrôle muet.
 _BOOT_MAX=$B
 _SHEETS_GROWTH_MAX=$S
 SEUILS

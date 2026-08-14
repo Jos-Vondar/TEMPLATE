@@ -1,3 +1,8 @@
+---
+name: secrets-detail
+description: Stocker un secret, ou comprendre pourquoi la sauvegarde refuse un fichier. Porte les régimes haute valeur et faible valeur, le jeton à privilège minimal, le triage par document devant une alarme.
+---
+
 # Règles — secrets, détail des régimes
 
 > Fiche situationnelle. Déclencheur : un secret doit être stocké quelque part, ou la sauvegarde refuse un fichier.

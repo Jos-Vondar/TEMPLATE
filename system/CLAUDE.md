@@ -1,13 +1,13 @@
 # Configuration — couche de règles
 
-> **Couche payée à chaque session.** Deux portes d'admission, une seule suffit : *(1)* son omission ferait-elle commettre une erreur ou une action irréversible dans une session qui ne charge rien d'autre ? *(2)* est-ce une chose qui ne peut pas se convoquer elle-même — identité, voix, conduite par défaut, pour lesquelles aucun déclencheur ne dira jamais « sois toi » ? Si aucune n'est franchie → fiche dans `~/.claude/fiches/`, avec un déclencheur en §3.3.
+> **Couche payée à chaque session.** Deux portes d'admission, une seule suffit : *(1)* son omission ferait-elle commettre une erreur ou une action irréversible dans une session qui ne charge rien d'autre ? *(2)* est-ce une chose qui ne peut pas se convoquer elle-même — identité, voix, conduite par défaut, pour lesquelles aucun déclencheur ne dira jamais « sois toi » ? Si aucune n'est franchie → compétence dans `~/.claude/skills/`, dont la `description` porte le déclencheur (§3.3).
 >
 > **Pas de plafond chiffré** : c'est le critère d'admission qui décide, pas un quota. Le poids est mesuré et affiché par la plomberie ; il avertit, il ne bloque pas.
 >
 > `<!-- WIZARD : ce fichier est assemblé à l'installation. Les blocs entre marqueurs
 > CONDITION sont RETIRÉS quand la condition est fausse. Retirer, jamais insérer : un
 > bloc de trop se voit à la lecture, un bloc manquant ne se voit jamais.
-> L'OSSATURE DES SECTIONS NE CHANGE PAS — les fiches y renvoient par numéro. -->`
+> L'OSSATURE DES SECTIONS NE CHANGE PAS — les compétences y renvoient par numéro. -->`
 
 ## 1. Mémoire et vérité
 
@@ -56,9 +56,9 @@ chacune avec son énoncé générique. Le grill remplit le réglage ; l'énoncé
 
 ## 3. Routage — où vit quoi
 
-Avant de traiter une demande, identifier le domaine. **Toute demande qui nomme un dossier de travail est une demande de domaine** : charger la table avant de conclure quoi que ce soit sur l'existence d'une cible.
+`<!-- CONDITION MULTIDOMAINE -->` Avant de traiter une demande, identifier le domaine. **Toute demande qui nomme un dossier de travail est une demande de domaine** : charger la table avant de conclure quoi que ce soit sur l'existence d'une cible. `<!-- FIN -->`
 
-Le routage dit *où* charger, pas *combien* : moduler la profondeur selon le poids de la tâche, jamais la chaîne entière par réflexe.
+`<!-- CONDITION MULTIDOMAINE -->` Le routage dit *où* charger, pas *combien* : moduler la profondeur selon le poids de la tâche, jamais la chaîne entière par réflexe. `<!-- FIN -->`
 
 ### 3.1 Domaines de travail
 
@@ -90,17 +90,20 @@ plus tard = une ligne ici ET une ligne au manifeste de sauvegarde. -->`
 | Plans et spécifications | `~/docs/{plans,specs}/` · `<projet>/docs/` | exécution d'un plan écrit |
 | Machinerie · périmètre de sauvegarde | `~/.claudeos/engine/` · `engine/config/SYNC_MAP` | plomberie, ajout d'un dossier au filet |
 
-### 3.3 Fiches — chargées sur déclencheur
+### 3.3 Règles situationnelles — compétences sur déclencheur
 
-| Déclencheur | Fiche |
+Elles vivent dans `~/.claude/skills/`, une compétence par déclencheur, invoquée par l'outil `Skill`. La `description` de chaque compétence **est** son déclencheur, chargée au démarrage : écrire une règle situationnelle, c'est écrire cette description en même temps que le corps. La table est la carte de rappel des compétences livrées ; elle se tient à jour avec le dossier.
+
+| Déclencheur | Compétence |
 | :--- | :--- |
-| J'écris un fait, un statut, une décision, ou je touche une source de vérité | `fiches/MEMOIRE_ET_VERITE.md` |
-| Je crée, nomme, déplace ou supprime un fichier ou un dossier | `fiches/FICHIERS_ET_NOMMAGE.md` |
-| Un secret doit être stocké, ou la sauvegarde refuse un fichier | `fiches/SECRETS_DETAIL.md` |
-| Reprise de contexte, distillation due, fin de session | `fiches/SESSION.md` |
-| J'écris, modifie ou désarme un contrôle mécanique ou une alarme | `fiches/CONTROLES_ET_ALARMES.md` |
-| `<!-- CONDITION LIVRABLE -->` Je produis un livrable destiné à un tiers, ou j'y avance un fait chiffré ou sourcé | `fiches/LIVRABLES.md` `<!-- FIN -->` |
-| `<!-- CONDITION PROXY -->` Une commande passée par le proxy économe échoue ou se comporte de travers, ou je veux mesurer ses gains | `fiches/RTK_DEPANNAGE.md` `<!-- FIN -->` |
+| J'écris un fait, un statut, une décision, ou je touche une source de vérité | `memoire-et-verite` |
+| Je crée, nomme, déplace ou supprime un fichier ou un dossier | `fichiers-et-nommage` |
+| Un secret doit être stocké, ou la sauvegarde refuse un fichier | `secrets-detail` |
+| Reprise de contexte, distillation due, fin de session | `session` |
+| Écrire l'état de reprise d'un niveau — bascule, palier franchi, décision tranchée, clôture | `reprise` |
+| J'écris, modifie ou désarme un contrôle mécanique ou une alarme | `controles-et-alarmes` |
+| `<!-- CONDITION LIVRABLE -->` Je produis un livrable destiné à un tiers, ou j'y avance un fait chiffré ou sourcé | `livrables` `<!-- FIN -->` |
+| `<!-- CONDITION PROXY -->` Une commande passée par le proxy économe échoue ou se comporte de travers, ou je veux mesurer ses gains | `rtk-depannage` `<!-- FIN -->` |
 
 ## 4. Code
 
@@ -126,7 +129,7 @@ plus tard = une ligne ici ET une ligne au manifeste de sauvegarde. -->`
 ## 6. Session
 
 - **En début de session, relayer d'emblée tous les signaux actionnables du démarrage** — rappels datés, dette de sécurité, distillation due, audit dû, fils ouverts — dès la première réponse et même si la question porte sur autre chose. Purger la ligne une fois l'action traitée.
-- **Raté de recherche = trou de routage.** Si je ne trouve pas ce qui existe, ou si l'utilisateur m'apprend que c'était là : retracer où j'ai cherché, nommer ce qui manquait dans la carte, le corriger, et consigner une ligne dans le registre des ratés. Jamais s'excuser à la place.
+- `<!-- CONDITION MULTIDOMAINE -->` **Raté de recherche = trou de routage.** Si je ne trouve pas ce qui existe, ou si l'utilisateur m'apprend que c'était là : retracer où j'ai cherché, nommer ce qui manquait dans la carte, le corriger, et consigner une ligne dans le registre des ratés. Jamais s'excuser à la place. `<!-- FIN -->`
 - `<!-- CONDITION MULTIPOSTE -->` **Jamais de sauvegarde depuis un poste non synchronisé** : elle committerait des fichiers périmés par-dessus du travail plus récent fait ailleurs. Le script refuse de lui-même ; ne pas outrepasser son refus. Et **un fichier qui n'existe que dans le dossier de secours de synchronisation est périmé par construction** — jamais une source de vérité. `<!-- FIN -->`
 
 ## 7. Création d'un domaine de travail

@@ -8,11 +8,19 @@
 DOMAINE=NOM_DU_DOMAINE          # majuscules et traits bas
 D="$HOME/workstations/$DOMAINE"
 
-mkdir -p "$D/_IGNORE"           # réceptacle confidentiel, à la racine du domaine
+mkdir -p "$D/_IGNORE"           # réceptacle confidentiel d'un domaine plat (sans projets)
 touch "$D/CLAUDE.md"            # règles locales, prioritaires sur les globales
 touch "$D/MEMORY.md"            # faits datés de ce domaine
 touch "$D/HANDOFF.md"           # état de reprise
 ```
+
+**Si le domaine porte des projets** (`$D/<PROJET>/`), chaque projet reçoit **son propre** réceptacle à sa racine, à sa création :
+
+```bash
+mkdir -p "$D/NOM_DU_PROJET/_IGNORE"
+```
+
+C'est à ce niveau que le contrôle 28 de l'autotest exige le réceptacle : posé au seul niveau du domaine, chaque projet reste sans le sien, et la sauvegarde est refusée. Une application ou un sous-dossier de projet n'en reçoit pas — un seul réceptacle par projet, à sa racine.
 
 Puis, et c'est le geste qui compte :
 

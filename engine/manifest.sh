@@ -24,8 +24,8 @@ SORTIE="${2:?fichier de sortie attendu}"
 carte() {
     printf '%s\n' \
         "engine|\$HOME/.claudeos/engine" \
-        "system/fiches|\$HOME/.claude/fiches" \
         "system/skills|\$HOME/.claude/skills" \
+        "system/output-styles|\$HOME/.claude/output-styles" \
         "resources|\$HOME/resources"
     # Les documents de racine, un par un : `CLAUDE.md` est EXCLU volontairement, c'est le
     # règlement assemblé à l'entretien. L'écraser rendrait à la personne les règles de

@@ -1,32 +1,52 @@
 #!/usr/bin/env bash
 # =============================================================================
-# BOOT CHECK — ClaudeOS (hook SessionStart + bannière de terminal)
+# BOOT CHECK — ClaudeOS (hook SessionStart)
 # LECTURE SEULE : détecte les écarts, n'agit jamais (pas de pull/install/écriture).
 # L'utilisateur décide.
-# Deux modes, une seule source de vérité pour les vérifs :
-#   (défaut)  émet le JSON additionalContext attendu par le hook SessionStart
-#             → injecté dans le contexte du modèle (invisible à l'écran).
-#   --human   affiche une bannière de boot animée dans le terminal
-#             → pour les yeux de l'utilisateur (appelée par le wrapper boot-wrapper.sh).
+# UN SEUL MODE : émet le JSON `additionalContext` attendu par le hook SessionStart, donc
+# injecté dans le contexte du modèle et invisible à l'écran. C'est le MODÈLE qui rend le
+# bilan, en première réponse, poussé par la consigne cachée du bloc DIRECTIVE plus bas.
+#
+# LA BANNIÈRE SHELL A ÉTÉ RETIRÉE le 2026-08-09. Un mode `--human` dessinait un bandeau
+# coloré dans le terminal ; son unique appelant était le wrapper `boot-wrapper.sh`, qui a cessé de
+# l'appeler pour injecter le prompt « tu es à jour ? » à la place — un hook de démarrage ne
+# peut qu'ajouter du contexte, il ne peut pas faire parler l'assistant en premier. La branche
+# n'avait donc plus d'appelant, et personne ne l'aurait vu : du code mort qui ne casse jamais.
+# Ce qui a SURVÉCU au retrait, et qui n'est pas de la bannière : `build_dashboard`, qui
+# fabrique le tableau d'état. Il servait les deux modes ; il sert désormais le seul restant.
 # =============================================================================
 set -uo pipefail
+
+# --- Refus des arguments inconnus ---
+# Ce script ne prend AUCUN argument depuis le retrait de la bannière. Un `--human` hérité d'un
+# raccourci ou d'une note ancienne serait sinon IGNORÉ EN SILENCE : la personne croirait avoir
+# demandé un bandeau, verrait passer du JSON, et conclurait à une panne. Politique du moteur,
+# la même que `backup.sh` et `calibrate.sh` — un drapeau inconnu se refuse, il ne se subit pas.
+if [ "$#" -gt 0 ]; then
+    echo "[boot-check] ERREUR : argument inattendu ('$*'). Ce script ne prend aucun argument." >&2
+    echo "[boot-check] Il émet le JSON du déclencheur SessionStart, et rien d'autre. La bannière" >&2
+    echo "[boot-check] de terminal a été retirée le 2026-08-09 : le bilan est rendu par le modèle." >&2
+    exit 2
+fi
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/synclib.sh"
 
-MODE="${1:-}"
 OUT=""
 
-# --- Flags pour le rendu humain (le mode JSON n'utilise que OUT) ---
+# --- Flags de gravité, consommés par le tableau d'état (build_dashboard) ---
 BEHIND=0; DIRTY=0; PROP_N=0; DISTILL_DUE=0; SEC_N=0
-GIT_OK=1; BACKUP_ERR=0; SYNC_INCOMPLETE=0; JOURNAL_STALE=0; JDATE=""; JDAYS=-1
-INDEX_BAD=0; SKILLS_MISSING=""; IDAYS=-1
+GIT_OK=1; BACKUP_ERR=0; SYNC_INCOMPLETE=0; JDATE=""; JDAYS=-1
+SKILLS_MISSING=""; IDAYS=-1
+CRUISE_D=-1
 
 # --- Écart git du repo de config ---
 if [ -d "$ROOT/.git" ]; then
-    # Fetch réseau seulement en mode JSON (hook). En --human on s'appuie sur la dernière
-    # ref connue → bannière instantanée ; le hook rafraîchit live juste après le lancement.
-    [ "$MODE" = "--human" ] || git -C "$ROOT" fetch --quiet 2>/dev/null
+    # Fetch réseau INCONDITIONNEL depuis le 2026-08-09. Il était sauté dans le mode bannière,
+    # pour un bandeau instantané, au prix d'un retard évalué sur la dernière ref connue. Ce
+    # mode n'existe plus : le seul appelant restant est le déclencheur, où la mesure doit être
+    # juste — c'est elle qui décide si le poste est annoncé à jour ou en retard.
+    git -C "$ROOT" fetch --quiet 2>/dev/null
     BEHIND=$(git -C "$ROOT" rev-list --count HEAD..@{u} 2>/dev/null || echo 0)
     DIRTY=$(git -C "$ROOT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
     [ "$BEHIND" -gt 0 ] && OUT="${OUT}⚠️ Config en retard de ${BEHIND} commit(s) — lance: bash ~/.claudeos/engine/sync.sh"$'\n'
@@ -34,12 +54,38 @@ if [ -d "$ROOT/.git" ]; then
     # #25 : croissance non bornée du dépôt (format lourd échappant à SYNC_IGNORE) ?
     PACK_KB=$(du -sk "$ROOT/.git" 2>/dev/null | cut -f1)
     [ "${PACK_KB:-0}" -gt 204800 ] && OUT="${OUT}⚠️ Dépôt config .git > 200 Mo — un format lourd échappe probablement à SYNC_IGNORE"$'\n'
+
+    # --- Compteur de convergence (2026-08-09, le document de conception). LECTURE SEULE. ---
+    # Croisière = 28 jours consécutifs sans chantier moteur ni chantier de règles. Le compteur
+    # rend la condition d'arrêt VISIBLE : sans lui, « le système est-il fini ? » ne se pose
+    # jamais, et l'amélioration indéfinie est ce qui a produit l'usine à gaz du 2026-07-27.
+    # Périmètre du chantier : `engine/` et `system/CLAUDE.md` — le moteur et le règlement.
+    # `--invert-grep` écarte les réparations : un enregistrement dont le message commence par
+    # `incident:` ne remet pas le compteur à zéro, c'est ce qui distingue un système qui se
+    # répare d'un système qu'on refait. La convention est écrite DANS le message du compteur,
+    # pas seulement ici : personne ne vient lire un script pour savoir comment nommer un commit.
+    # `MACHINE_TODO.md` est EXCLU du périmètre, constaté en exerçant le compteur le jour de son
+    # écriture : il vit sous `engine/` et `machine-todo.sh` l'enregistre tout seul, si bien que
+    # la moindre consigne inter-machines remettait le compteur à zéro. Une file d'attente n'est
+    # pas un chantier — sans cette exclusion, le compteur n'aurait jamais dépassé quelques jours
+    # et aurait fini par ne rien mesurer du tout.
+    CRUISE_TS=$(git -C "$ROOT" log -1 --format='%ct' --invert-grep --regexp-ignore-case \
+        --grep='^incident:' -- engine system/CLAUDE.md ':!engine/config/MACHINE_TODO.md' 2>/dev/null)
+    if [ -n "${CRUISE_TS:-}" ] && [ "$CRUISE_TS" -gt 0 ] 2>/dev/null; then
+        CRUISE_D=$(( ( $(date +%s) - CRUISE_TS ) / 86400 ))
+    fi
 fi
 
 # --- Flag propositions d'apprentissage ---
 LP="$MEM/LEARNING_PROPOSALS.md"
 if [ -f "$LP" ]; then
-    PROP_N=$(awk '/^## /{n++} END{print n+0}' "$LP" 2>/dev/null || echo 0)   # #8 : toujours numérique, toujours rc 0
+    # Un titre BARRÉ (`## ~~`) est une proposition déjà traitée, conservée pour que la
+    # distillation voie ce qu'elle a produit : elle ne se compte pas. Corrigé le 2026-08-12 —
+    # le compteur annonçait 2 en attente là où une seule l'était, l'autre étant barrée depuis
+    # le 2026-08-10. Une alarme se construit sur l'état courant, jamais sur la trace d'un état
+    # passé : compter un titre barré, c'est retrouver un souvenir. Le motif `awk '/^## /` reste
+    # littéral en tête, car `selftest.sh` § 20 le cherche au caractère près.
+    PROP_N=$(awk '/^## /{ if ($0 !~ /^## *~~/) n++ } END{print n+0}' "$LP" 2>/dev/null || echo 0)   # #8 : toujours numérique, toujours rc 0
     [ "$PROP_N" -gt 0 ] && OUT="${OUT}🧠 ${PROP_N} proposition(s) d'apprentissage en attente de validation ($LP)"$'\n'
 fi
 
@@ -58,7 +104,7 @@ fi
 # le plafond à trois). Ils graduaient l'affichage d'un rappel que personne ne traitait,
 # ce qui ajoutait de la mécanique sans changer l'issue. Le retard est simplement dit en
 # clair, et c'est la CONDUITE qui traite le rappel : l'assistant pose une question par
-# rappel échu en début de séance, avant de dérouler la demande (fiches/SESSION.md).
+# rappel échu en début de séance, avant de dérouler la demande (compétence `session`).
 REMINDERS="$MEM/REMINDERS.md"
 REMINDER_N=0
 if [ -f "$REMINDERS" ]; then
@@ -101,7 +147,7 @@ fi
 # tourne qu'à la demande — donc jamais.
 # Deux niveaux depuis le 2026-07-25 : un contrôle de contenu LÉGER greffé sur la distillation
 # hebdomadaire (avertissements du filet, trois sondages dans la carte, registre des ratés,
-# fils reconduits — voir fiches/SESSION.md), et cet audit COMPLET en éventail, cher, dont le
+# fils reconduits — voir la compétence `session`), et cet audit COMPLET en éventail, cher, dont le
 # Depuis le 2026-07-27 l'audit est HEBDOMADAIRE : il a reçu tout ce qui a quitté la
 # clôture (hygiène, retombée documentaire, distillation, ratés de routage), donc son seuil
 # passe de 90 à 7 jours.
@@ -149,14 +195,31 @@ if [ -f "$LOG" ]; then
     LOG_AGE=$(( ( $(date +%s) - $(stat -c %Y "$LOG" 2>/dev/null || date +%s) ) / 86400 ))
     # awk plutôt qu'une boucle `read` : celle-ci perd la dernière ligne d'un fichier sans
     # retour à la ligne final, défaut déjà payé une fois sur le relais des rappels datés.
-    BK_VERDICT=none; BK_LINE=0; BK_PROG=0
-    IFS=' ' read -r BK_VERDICT BK_LINE BK_PROG <<< "$(awk '
-        /ERREUR|ALARME/                                        { v="err"; vl=NR; next }
-        /Sauvegarde terminée|Aucun changement à sauvegarder/    { v="ok";  vl=NR; next }
+    BK_VERDICT=none; BK_LINE=0; BK_PROG=0; BK_OV="-"
+    IFS=' ' read -r BK_VERDICT BK_LINE BK_PROG BK_OV <<< "$(awk '
+        # `ov` = gardes levés portés par la ligne de verdict (backup.sh, 2026-08-09). Il se
+        # réarme à CHAQUE ligne de verdict, y compris les lignes en prose qui n en portent
+        # jamais : sans ce réarmement, un override lu tôt survivrait à des passages propres
+        # plus récents — l alarme survivant à sa cause, défaut déjà payé sur ce même bloc.
+        function grab_ov(l) {
+            if (match(l, /overrides=[A-Z_,]+/)) return substr(l, RSTART+10, RLENGTH-10)
+            return ""
+        }
+        # Journal structuré depuis le 2026-08-08 : backup.sh écrit lui-même sa classe,
+        # quelle que soit la voie d appel. Contrat des classes : voir backup.sh (verdict()).
+        /VERDICT=refus-retard/                                  { v="late"; vl=NR; ov=grab_ov($0); next }
+        /VERDICT=(err|refus-garde)/                             { v="err";  vl=NR; ov=grab_ov($0); next }
+        /VERDICT=ok/                                            { v="ok";   vl=NR; ov=grab_ov($0); next }
+        # Lignes en prose, antérieures au journal structuré : on continue de les lire pour
+        # ne pas perdre le verdict sur un journal existant. Le refus pour retard passe
+        # AVANT le motif générique — sa ligne porte le mot ERREUR sans être une panne.
+        /en retard de [0-9]+ commit/                            { v="late"; vl=NR; ov=""; next }
+        /ERREUR|ALARME/                                        { v="err"; vl=NR; ov=""; next }
+        /Sauvegarde terminée|Aucun changement à sauvegarder/    { v="ok";  vl=NR; ov=""; next }
         /Pull --rebase|^\[main |^To |main -> main|files? changed|^ *create mode/ { prog=NR }
-        END { printf "%s %d %d", (v==""?"none":v), vl+0, prog+0 }
+        END { printf "%s %d %d %s", (v==""?"none":v), vl+0, prog+0, (ov==""?"-":ov) }
     ' "$LOG" 2>/dev/null)"
-    : "${BK_VERDICT:=none}" "${BK_LINE:=0}" "${BK_PROG:=0}"
+    : "${BK_VERDICT:=none}" "${BK_LINE:=0}" "${BK_PROG:=0}" "${BK_OV:=-}"
     if [ "$BK_VERDICT" = "none" ] && [ -s "$LOG" ]; then
         BACKUP_ERR=1
         OUT="${OUT}⚠️ Journal de backup sans verdict lisible (ni réussite ni erreur) — voir $LOG"$'\n'
@@ -169,6 +232,22 @@ if [ -f "$LOG" ]; then
     elif [ "$LOG_AGE" -gt 7 ]; then
         BACKUP_ERR=1
         OUT="${OUT}⚠️ Backup auto sans trace depuis ${LOG_AGE}j — le hook SessionEnd tourne-t-il encore ? ($LOG)"$'\n'
+    elif [ "$BK_VERDICT" = "late" ] && [ "$BEHIND" -gt 0 ]; then
+        # Refus pour cause de poste non synchronisé : un garde-fou en bon état, pas une
+        # panne — donc PAS de BACKUP_ERR, la plomberie reste verte (décision du 2026-08-08,
+        # écrite en DESIGN). L état courant du retard vient de git ligne 30, jamais du
+        # journal : si le retard a disparu, ce refus n a plus d objet et on se taît.
+        # La limite qui vivait ici est TOMBÉE avec la bannière (2026-08-09) : le retard
+        # s évaluait sans fetch dans le mode terminal, si bien qu un retard apparu depuis
+        # pouvait faire taire ce rappel d une session. Il n y a plus qu un mode, et il fetche.
+        OUT="${OUT}⚠️ Dernière sauvegarde REFUSÉE : poste en retard de ${BEHIND} commit(s). Synchronise puis relance: bash ~/.claudeos/engine/sync.sh"$'\n'
+    fi
+    # Garde levé au dernier passage (2026-08-09). INDÉPENDANT de la chaîne ci-dessus, qui est
+    # exclusive : le cas qui coûte est justement `VERDICT=ok` avec un levier levé — la
+    # plomberie paraît verte alors qu'une alarme s'est tue par décision. On rappelle la
+    # décision, on ne la conteste pas : lever un levier est légitime, l'oublier ne l'est pas.
+    if [ "$BK_OV" != "-" ]; then
+        OUT="${OUT}🔓 Dernière sauvegarde passée avec garde levé : ${BK_OV} — l'alarme correspondante ne s'est pas exprimée. Vérifier que le motif tient toujours, ou relancer sans le levier."$'\n'
     fi
 fi
 
@@ -195,6 +274,26 @@ if [ "${#BOOT_DRIFT_DIFFERS[@]}" -gt 0 ]; then
     OUT="${OUT}⚠️ ${#BOOT_DRIFT_DIFFERS[@]} fichier(s) local/dépôt au contenu DIVERGENT (ex. ${BOOT_DRIFT_DIFFERS[0]#"$HOME"/}) — travail non sauvegardé, ou dernier backup en échec"$'\n'
 fi
 
+# La liste blanche cesse d'être silencieuse (2026-08-09). LECTURE SEULE.
+# Motif : le verrou de `.gitignore` refuse tout fichier NEUF, et ce refus n'était annoncé que
+# par `backup.sh` — en fin de séance, dans une sortie que le hook redirige vers un journal que
+# personne ne lit. Un fichier refusé n'existe plus que sur un poste : c'est la perte de
+# continuité la plus sournoise du système, et deux victimes l'ont prouvé (la spec de la vague
+# elle-même, et un résidu de rappel de voix refusé à chaque sauvegarde depuis le 2026-08-05).
+# La logique n'est pas recopiée ici : elle vit dans `synclib.sh`, appelée par les deux.
+# Une ligne par fichier, dans le bloc ALERTES — donc exclu du calcul du contrôle de poids
+# (#21), comme toute alerte datée : elle est bornée par construction et disparaît quand on
+# la traite. On ne bloque pas, on nomme ; c'est l'utilisateur qui décide d'autoriser ou non.
+BOOT_REFUSES=$(claudeos_refused_by_lock)
+if [ -n "$BOOT_REFUSES" ]; then
+    OUT="${OUT}📵 $(printf '%s\n' "$BOOT_REFUSES" | wc -l | tr -d ' ') fichier(s) refusé(s) par la liste blanche — ils n'existent que sur ce poste :"$'\n'
+    while IFS= read -r _rf || [ -n "$_rf" ]; do
+        [ -z "$_rf" ] && continue
+        OUT="${OUT}      ↳ ${_rf}"$'\n'
+    done <<< "$BOOT_REFUSES"
+    OUT="${OUT}      ↳ décider pour chacun : autorisation \`!<chemin>\` après le verrou de ~/.claudeos/.gitignore, ou déplacement hors zone sauvegardée."$'\n'
+fi
+
 # #7 : dernier backup fait HORS-LIGNE ? (garde-fou de fraîcheur évalué sur ref périmée)
 [ -f "$SELF/.last-offline-backup" ] && OUT="${OUT}⚠️ Dernier backup fait HORS-LIGNE (fraîcheur non garantie) — vérifie le retard: bash ~/.claudeos/engine/sync.sh"$'\n'
 
@@ -204,8 +303,45 @@ if [ -n "$JDATE" ]; then
     DAYS=$(( ( $(date +%s) - $(date -d "$JDATE" +%s 2>/dev/null || echo "$(date +%s)") ) / 86400 ))
     JDAYS=$DAYS
     if [ "$DAYS" -gt 10 ]; then
-        JOURNAL_STALE=1
+        # `JOURNAL_STALE` retiré le 2026-08-09 : son unique lecteur était la réplique de la
+        # bannière. L ancienneté du journal reste dite ici, et graduée par le tableau d état.
         OUT="${OUT}⚠️ Journal périmé (dernière entrée ${JDATE}, il y a ${DAYS}j) — le rituel de clôture ne tourne peut-être plus"$'\n'
+    fi
+fi
+
+# --- Séance non clôturée ? (filet dernière-activité, 2026-08-09) ---
+# `backup.sh` laisse un marqueur local à chaque passage : sa date, et les fichiers qu'il a mis
+# en file. Si ce marqueur est POSTÉRIEUR à la dernière entrée de journal, une séance a travaillé
+# et enregistré sans se refermer — le rituel de clôture n'a pas tourné. L'interruption non
+# annoncée cesse d'être aveugle : on ne peut pas compter sur un signal de fin que l'utilisateur
+# ne donne pas toujours (le poste s'éteint, ou il passe à autre chose).
+# LECTURE SEULE, et dans le bloc ALERTES : c'est une alerte datée, bornée, qui disparaît quand
+# on la traite — donc exclue du calcul du contrôle de poids (#21), comme les autres.
+# ÉCHAPPATOIRE, et elle est nécessaire : l'écriture de reprise en séance laisse un bloc « Séance en cours »
+# daté dans la reprise du niveau. S'il en existe un du même jour, la séance a bien laissé son
+# état — la clôture reste à faire, mais rien n'est perdu, et crier serait du bruit.
+ACTMARK="$SELF/.derniere-activite"
+if [ -f "$ACTMARK" ] && [ -n "$JDATE" ]; then
+    AMDATE=$(head -1 "$ACTMARK" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
+    if [ -n "$AMDATE" ] && [[ "$AMDATE" > "$JDATE" ]]; then
+        AM_INCR=""
+        while IFS= read -r _hf; do
+            grep -qF "Séance en cours" "$_hf" 2>/dev/null \
+                && grep -qF "$AMDATE" "$_hf" 2>/dev/null && { AM_INCR=1; break; }
+        done < <( { echo "$HOME/.claude/HANDOFF.md"
+                    while IFS= read -r _wr; do
+                        find "$_wr" -maxdepth 3 -name HANDOFF.md -type f 2>/dev/null
+                    done < <(claudeos_ws_roots); } )
+        if [ -z "$AM_INCR" ]; then
+            OUT="${OUT}📌 Séance du ${AMDATE} non clôturée (journal arrêté au ${JDATE}) — elle a touché :"$'\n'
+            # Substitution de PROCESSUS et non tuyau : un `while read` en bout de tuyau tourne
+            # dans un sous-shell, et les ajouts à OUT y meurent avec lui — l'alerte s'afficherait
+            # sans sa liste, sans rien signaler.
+            while IFS= read -r _af || [ -n "$_af" ]; do
+                [ -n "$_af" ] && OUT="${OUT}      ↳ ${_af}"$'\n'
+            done < <(tail -n +2 "$ACTMARK" | head -10)
+            OUT="${OUT}      ↳ écrire l'entrée de journal de cette séance avant d'ouvrir la suivante."$'\n'
+        fi
     fi
 fi
 
@@ -223,7 +359,12 @@ fi
 # Amorçages auto-détectables par la machine (donc PAS dans le changelog) :
 # la ligne bannière de démarrage dans ~/.bashrc et le plugin superpowers.
 if [ -f "$SELF/boot-wrapper.sh" ] && ! grep -qF 'boot-wrapper.sh' "$HOME/.bashrc" 2>/dev/null; then
-    OUT="${OUT}⚠️ Bannière de démarrage absente de ~/.bashrc — ajouter à ~/.bashrc la ligne : source ~/.claudeos/engine/boot-wrapper.sh"$'\n'
+    # Le mot « bannière » est tombé le 2026-08-09 avec la bannière : ce que `~/.bashrc` doit
+    # sourcer est le WRAPPER, dont le métier est d'injecter le prompt de bilan au lancement.
+    # Sans lui, la session démarre muette — le contexte est bien injecté, mais rien ne fait
+    # parler l'assistant en premier. Le renvoi de document est conservé mot pour mot : la
+    # chaîne d'export le réécrit par substitution littérale.
+    OUT="${OUT}⚠️ Wrapper de démarrage absent de ~/.bashrc (le bilan ne s'ouvrira pas tout seul) — ajouter à ~/.bashrc la ligne : source ~/.claudeos/engine/boot-wrapper.sh"$'\n'
 fi
 if ! find "$HOME/.claude/plugins" -maxdepth 3 -iname '*superpowers*' 2>/dev/null | grep -q .; then
     OUT="${OUT}⚠️ Plugin superpowers absent — lance: bash ~/.claudeos/engine/sync.sh"$'\n'
@@ -232,7 +373,8 @@ fi
 # Index de rappel absent ou périmé ?
 IDX="$MEM/INDEX.md"
 if [ ! -f "$IDX" ]; then
-    INDEX_BAD=1
+    # `INDEX_BAD` retiré le 2026-08-09, même motif que `JOURNAL_STALE` ci-dessus : lu par la
+    # seule bannière. Le tableau d état porte déjà l état de la carte de rappel, gradué.
     OUT="${OUT}⚠️ Index de rappel absent (memory/INDEX.md) — sera régénéré au prochain backup"$'\n'
 else
     IDATE=$(grep -m1 -oE 'auto-généré le [0-9]{4}-[0-9]{2}-[0-9]{2}' "$IDX" 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
@@ -240,7 +382,6 @@ else
         ID=$(( ( $(date +%s) - $(date -d "$IDATE" +%s 2>/dev/null || echo "$(date +%s)") ) / 86400 ))
         IDAYS=$ID
         if [ "$ID" -gt 10 ]; then
-            INDEX_BAD=1
             OUT="${OUT}⚠️ Index de rappel périmé (généré ${IDATE}, il y a ${ID}j) — relance backup.sh"$'\n'
         fi
     fi
@@ -269,24 +410,56 @@ T_WARN=7; T_CRIT=14   # paliers d'ancienneté (jours) : <T_WARN vert, T_WARN..T_
 # (engine/build-threads.sh, régénérée à chaque sauvegarde) porte l'âge de première apparition
 # et le nombre de reconductions — c'est ça qui permet de PROPOSER au lieu de rapporter. Repli
 # sur les fils de la dernière session si le fichier n'existe pas encore (poste neuf).
-THREADS=$(python3 - "$MEM" 2>/dev/null <<'PYEOF'
+# Le créneau du jour (2026-08-09, le document de conception) : la déclaration est relue ICI et non
+# recopiée depuis la vue, parce que la vue est régénérée à la SAUVEGARDE — donc la veille au
+# soir — et qu'un créneau est une propriété d'aujourd'hui. La vue apporte l'attribution d'un
+# fil à un domaine, ce démarrage apporte la date. Aucun fil n'est masqué : le hors-créneau est
+# marqué, et c'est la consigne de démarrage qui l'écarte de la PROPOSITION.
+THREADS=$(python3 - "$MEM" "$CFG/CRENEAUX" "$(date +%u)" 2>/dev/null <<'PYEOF'
 import re, sys, os
-MEM = sys.argv[1]
+MEM, CRENEAUX, DOW = sys.argv[1], sys.argv[2], int(sys.argv[3]) - 1
 def out(s): print(s.rstrip())
+
+DAYS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim']
+creneaux = {}
+try:
+    for line in open(CRENEAUX, encoding='utf-8'):
+        line = line.split('#', 1)[0].strip()
+        f = line.split()
+        if len(f) < 2: continue
+        idx = sorted({DAYS.index(j) for j in f[1].split(',') if j in DAYS})
+        if idx: creneaux[f[0]] = idx
+except OSError:
+    pass
+ouverts = sorted(w for w, d in creneaux.items() if DOW in d)
+fermes = sorted(w for w in creneaux if w not in ouverts)
+
 p = f'{MEM}/OPEN_THREADS.md'
 if os.path.exists(p):
     t = open(p, encoding='utf-8').read()
     ech = re.search(r'^## Échéances dépassées\n(.*?)(?=^## |\Z)', t, re.M | re.S)
-    tab = re.findall(r'^\| (\d+) j \| (\d{4}-\d{2}-\d{2}) \| ([^|]*) \| ([^|]*) \| ([^|]*) \|$', t, re.M)
+    # 6 colonnes depuis le 2026-08-09 : `Créneau` s'est insérée entre `Reconduit` et `Geste`.
+    tab = re.findall(r'^\| (\d+) j \| (\d{4}-\d{2}-\d{2}) \| ([^|]*) \| ([^|]*) \| ([^|]*) \| ([^|]*) \|$',
+                     t, re.M)
+    if creneaux:
+        out(f"Créneau du jour ({DAYS[DOW]}) : "
+            + (f"ouvert pour {', '.join(ouverts)}" if ouverts else "aucun domaine à créneau n'est ouvert")
+            + (f" ; hors créneau : {', '.join(fermes)}." if fermes else "."))
     if ech and ech.group(1).strip():
         out('Échéances dépassées :')
         for l in ech.group(1).strip().splitlines()[:3]:
             out('  ' + l.strip()[:170])
     if tab:
         out('Fils ouverts, par ancienneté :')
-        for a, d, rec, g, txt in tab[:5]:
+        for a, d, rec, cren, g, txt in tab[:5]:
             r = f", reconduit {rec.strip()}" if rec.strip() not in ('—', '') else ''
-            out(f'  - [{a} j{r}] {g.strip()} : ' + re.sub(r'\s+', ' ', txt).strip()[:150])
+            c = cren.strip()
+            ws = c.split('·')[0].strip()
+            k = ''
+            if ws in creneaux:
+                k = f", {c.split('·',1)[1].strip()}" if '·' in c else ''
+                if ws not in ouverts: k += ' — HORS CRÉNEAU aujourd’hui'
+            out(f'  - [{a} j{r}{k}] {g.strip()} : ' + re.sub(r'\s+', ' ', txt).strip()[:150])
 else:
     j = f'{MEM}/SESSION_JOURNAL.md'
     try: t = open(j, encoding='utf-8').read()
@@ -299,7 +472,9 @@ PYEOF
 )
 JLINE=$(grep -m1 '^## ' "$MEM/SESSION_JOURNAL.md" 2>/dev/null | sed 's/^##[[:space:]]*//')
 
-# --- Tableau d'état commun (bannière --human + contexte JSON) ---
+# --- Tableau d'état, consommé par le contexte JSON ---
+# Il servait aussi la bannière de terminal, retirée le 2026-08-09 ; c'est la moitié VIVANTE
+# de ce qui était partagé, et la raison pour laquelle le retrait s'est arrêté à la bannière.
 # Émet des lignes LABEL|STATUT|GRAVITE (gravite = ok, warn ou crit).
 build_dashboard() {
     # CONFIG SYNC
@@ -328,6 +503,9 @@ build_dashboard() {
     elif [ "$SYNC_INCOMPLETE" = "1" ]; then echo "PLUMBING|SYNC INCOMPLET|crit"
     elif [ -n "$SKILLS_MISSING" ]; then echo "PLUMBING|SKILL(S) MANQUANT(S)|warn"
     else echo "PLUMBING|OK|ok"; fi
+    # CROISIÈRE (compteur de convergence — le document de conception). Jamais `warn` : ce n'est pas un défaut
+    # d'être en chantier, c'est un fait à voir. Muet si le dépôt n'a pas d'historique lisible.
+    [ "$CRUISE_D" -ge 0 ] && echo "CROISIÈRE|J ${CRUISE_D}/28 (tout chantier remet à zéro ; commit « incident: » non)|ok"
     # CATCH-UP (file de rattrapage manuel par poste — le document de conception, conditionnel)
     if [ -z "$ME" ]; then echo "CATCH-UP|POSTE NON ENREGISTRÉ|crit"
     elif [ "${PEND:-0}" -gt 0 ]; then echo "CATCH-UP|${PEND} À RATTRAPER (machine-todo.sh pending)|warn"; fi
@@ -335,86 +513,23 @@ build_dashboard() {
 DASH_ROWS=$(build_dashboard)
 
 # =============================================================================
-# MODE HUMAIN — bannière de boot animée (terminal)
-# =============================================================================
-if [ "$MODE" = "--human" ]; then
-    ESC=$'\033'
-    if [ -t 1 ]; then
-        B="${ESC}[1m"; D="${ESC}[2m"; G="${ESC}[32m"; Y="${ESC}[33m"; R="${ESC}[31m"; C="${ESC}[36m"; X="${ESC}[0m"
-    else
-        B=""; D=""; G=""; Y=""; R=""; C=""; X=""
-    fi
-    # Les pauses d'affichage sont RETIRÉES le 2026-08-05 : la fonction est inerte, ses neuf
-    # appels restent en place pour dire où le bandeau respirait. Mesuré avant retrait :
-    # 1,150 s de temps réel pour 0,196 s de temps processeur, soit environ 0,95 s passée à
-    # attendre, à chaque ouverture de terminal. Le tableau d'état s'affiche sans elles.
-    nap() { : "$1"; }
-    sub() { # $1 label  $2 statut  $3 couleur
-        printf "  %s▸%s %s%-17s%s %s%s%s\n" "$C" "$X" "$D" "$1" "$X" "$3" "$2" "$X"
-        nap 0.10
-    }
-
-    printf "\n"
-    printf "  %s  ██████  %s\n"                              "$C" "$X"; nap 0.05
-    printf "  %s ██    ██ %s   %sassistant%s\n"                   "$C" "$X" "$B" "$X"; nap 0.05
-    printf "  %s ██    ██ %s   %sClaudeOS · second brain%s\n" "$C" "$X" "$D" "$X"; nap 0.05
-    printf "  %s ██    ██ %s\n"                                   "$C" "$X"; nap 0.05
-    printf "  %s  ██████  %s\n"                               "$C" "$X"; nap 0.12
-
-    # Tableau d'état — consomme les rows calculées en zone commune (build_dashboard)
-    while IFS='|' read -r lbl st sev; do
-        [ -z "$lbl" ] && continue
-        case "$sev" in ok) col="$G";; warn) col="$Y";; crit) col="$R";; *) col="$X";; esac
-        sub "$lbl" "$st" "$col"
-    done <<< "$DASH_ROWS"
-
-    # Rappel de la dernière session (JLINE calculé en zone commune)
-    printf "  %s────────────────────────────────────────%s\n" "$D" "$X"; nap 0.10
-    [ -n "$JLINE" ] && { printf "  %sDernière session%s · %s\n" "$D" "$X" "$JLINE"; nap 0.06; }
-
-    # Punchline — contextuelle si alerte, sinon pool aléatoire
-    if [ "$BACKUP_ERR" = "1" ]; then
-        LINE="Dernière sauvegarde en erreur."
-    elif [ "$BEHIND" -gt 0 ]; then
-        LINE="Configuration en retard sur le dépôt. Lance sync.sh."
-    elif [ "$DISTILL_DUE" = "1" ]; then
-        LINE="Distillation en attente : des règles candidates attendent une décision."
-    elif [ "$JOURNAL_STALE" = "1" ]; then
-        LINE="Journal périmé : la dernière clôture de séance remonte à loin."
-    elif [ "$PROP_N" -gt 0 ] || [ "$GIT_OK" = "0" ] || [ -n "$SKILLS_MISSING" ] || [ "$INDEX_BAD" = "1" ]; then
-        LINE="Signaux au démarrage, détaillés ci-dessus."
-    else
-        POOL=(
-            "Système prêt."
-            "Démarrage terminé, aucun signal."
-            "En ligne. Rien à signaler."
-            "État nominal."
-        )
-        IDX2=$(( RANDOM % ${#POOL[@]} ))
-        LINE="${POOL[$IDX2]}"
-    fi
-    printf "\n  %sOS>%s %s%s%s\n\n" "$B$C" "$X" "$D" "$LINE" "$X"
-    exit 0
-fi
-
-# =============================================================================
 # MODE JSON — contexte du hook SessionStart
 # =============================================================================
 # Consigne cachée : force le modèle à ouvrir sa 1re réponse par le bilan.
 DIRECTIVE="⟦CONSIGNE DE DÉMARRAGE — ne pas recopier telle quelle à l'écran⟧
 Question implicite de lancement : « tu es à jour ? »
-Ouvre ta TOUTE PREMIÈRE réponse de la session par ce bilan, AVANT de traiter la demande de l'utilisateur, dans cet ordre :
-1) État du poste courant : à jour, ou en retard de N commit(s). Si en retard, PROPOSE « bash ~/.claudeos/engine/sync.sh » sans le lancer toi-même (le démarrage n'agit jamais seul).
-2) Tableau d'état (bloc TABLEAU D'ÉTAT ci-dessous).
-3) Dernière session : poste + résumé (bloc DERNIÈRE SESSION).
-4) Signaux actionnables s'il y en a (rappels ⏰, dette 🔐, distillation 🧪, audit 🔍 — bloc ALERTES).
-5) TERMINE PAR UNE PROPOSITION, pas par un état : à partir du bloc CE QUI RESTE À FAIRE, dis ce que
-   tu ferais aujourd'hui et dans quel ordre, en 2 ou 3 lignes. Distingue ce qui se FAIT, ce qui
-   demande une DÉCISION de lui, et ce qui n'attend que la RELANCE d'un tiers — ne propose jamais
-   comme travail du jour ce qui est bloqué ailleurs. Nomme l'ancienneté quand elle est parlante
-   (« reconduit 9 fois depuis 15 jours » vaut mieux que « en retard »). Ta proposition n'est pas
-   un ordre : il connaît un contexte que ces fichiers ignorent, il tranche.
-Puis enchaîne sur la demande de l'utilisateur.
+Ouvre ta TOUTE PREMIÈRE réponse par ce bilan, AVANT la demande de l'utilisateur, dans cet ordre :
+1) Poste : à jour, ou en retard de N commit(s). Si en retard, PROPOSE « bash ~/.claudeos/engine/sync.sh » sans le lancer — le démarrage n'agit jamais seul.
+2) Tableau d'état (bloc ci-dessous).
+3) Dernière session : poste + résumé.
+4) Signaux actionnables s'il y en a (⏰ rappels, 🔐 dette, 🧪 distillation, 🔍 audit — bloc ALERTES).
+5) TERMINE PAR UNE PROPOSITION, pas par un état : depuis CE QUI RESTE À FAIRE, dis en 2 ou 3 lignes
+   ce que tu ferais aujourd'hui et dans quel ordre. Distingue ce qui se FAIT, ce qui demande sa
+   DÉCISION, ce qui n'attend que la RELANCE d'un tiers. Ne propose jamais ce qui est bloqué
+   ailleurs ni ce qui est marqué HORS CRÉNEAU : listé et daté, jamais proposé. Nomme l'ancienneté
+   dans l'unité de la vue (« reconduit 9 fois depuis 15 jours », pas « en retard »). Ta proposition
+   n'est pas un ordre : il connaît un contexte que ces fichiers ignorent, il tranche.
+Puis enchaîne sur sa demande.
 "
 
 # Tableau d'état en texte simple (mêmes lignes que la bannière, sans couleur).
@@ -446,6 +561,44 @@ ${THREADS:-(aucun fil ouvert consigné)}
 --- POUR ALLER PLUS LOIN ---
 Détail des sessions passées : ${MEM}/SESSION_JOURNAL.md
 Ne le lire que si l'utilisateur déclare un contexte de travail ou demande l'historique."
+
+# --- Session de PROJET : contexte réduit (2026-08-12) ---------------------------
+# Une session lancée par session-open.sh porte `OS_SESSION_SCOPE=projet`. Sans la
+# variable, rien ne change : le bilan complet ci-dessus reste le défaut.
+#
+# POURQUOI CETTE BRANCHE EXISTE, mesuré au premier essai réel. Le rôle de la session
+# était dit dans le texte de lancement de l'onglet, et ça n'a pas suffi : la consigne
+# du hook ORDONNE d'ouvrir par le bilan système, et cet ordre a gagné. La sous-session
+# a donc rendu le tableau d'état, proposé `sync.sh` et relayé les signaux racine —
+# exactement ce qu'elle ne doit pas faire. Un texte de lancement ne peut pas défaire
+# une consigne injectée : c'est la consigne injectée qu'il faut changer.
+if [ "${OS_SESSION_SCOPE:-}" = "projet" ]; then
+    # Niveau déduit du dossier courant, jamais écrit en dur : plusieurs postes, et
+    # le dossier personnel diffère. Hors `workstations/`, on retombe sur le chemin nu.
+    _lvl="${PWD#"$HOME"/workstations/}"
+    [ "$_lvl" = "$PWD" ] && _lvl="$PWD"
+    _hoff="$PWD/HANDOFF.md"
+    [ -f "$_hoff" ] && _hoff_st="présente" || _hoff_st="à créer au premier palier"
+
+    CTX_FULL="=== ClaudeOS boot — session de PROJET ===
+⟦CONSIGNE DE DÉMARRAGE — ne pas recopier telle quelle à l'écran⟧
+Tu es la session dédiée à ${_lvl}. Il n'y a pas de bilan système ici : ouvre ta première
+réponse par l'état de CE niveau, trois lignes au plus, depuis sa reprise.
+Ton périmètre d'écriture est ce dossier : ${_hoff} et ${PWD}/MEMORY.md.
+Le global appartient à la session principale — règlement racine, mémoire racine,
+DESIGN.md, sauvegarde, synchronisation, boucle d'apprentissage, journal de session.
+Ce qui relève d'elle, remonte-le lui en une ligne ; elle l'écrit, pas toi.
+La sauvegarde et la synchronisation se lancent depuis la session principale seulement :
+deux sauvegardes concurrentes écrivent l'une par-dessus l'autre.
+Puis enchaîne sur sa demande.
+
+--- NIVEAU ---
+${_lvl}
+Reprise : ${_hoff} (${_hoff_st})
+
+--- POUR ALLER PLUS LOIN ---
+État système, fils ouverts de tous les projets, sauvegarde : session principale."
+fi
 
 python3 -c '
 import json, sys

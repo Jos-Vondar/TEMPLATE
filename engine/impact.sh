@@ -109,6 +109,10 @@ git -C "$ROOT" ls-files --others --exclude-standard 2>/dev/null > "$UNTRACKED"
 # --- Correspondances dépôt→vivant, dérivées du manifeste ---------------------
 claudeos_pairs > "$PAIRS"
 
+# Les racines de workstation passent par l'ENVIRONNEMENT : `claudeos_ws_roots` est la SEULE
+# définition de « qu'est-ce qu'une workstation » (config.sh), et la recopier ici en ferait une
+# seconde à faire vieillir à part.
+CLAUDEOS_WS_ROOTS="$(claudeos_ws_roots)" \
 python3 - "$CHANGED" "$PAIRS" "$ROOT" "$PATCH" "$UNTRACKED" <<'PYEOF'
 import os, re, sys, glob
 from collections import defaultdict
@@ -132,7 +136,7 @@ def to_live(rel):
     return os.path.join(root, rel)          # engine/, README.md… vivent dans le dépôt
 
 # Noms trop génériques pour servir de clé : on remonte d'un cran de chemin.
-GENERIC = {'CLAUDE.md','MEMORY.md','DESIGN.md','DESIGN.md','HANDOFF.md','ARCHIVE.md',
+GENERIC = {'CLAUDE.md','MEMORY.md','DESIGN.md','HANDOFF.md','ARCHIVE.md',
            'INDEX.md','README.md','SKILL.md','SYSTEME.md','settings.json'}
 
 def key_for(live):
@@ -221,13 +225,17 @@ for rel in (l.strip() for l in open(untracked_f, encoding='utf-8') if l.strip())
 # Ce qui DÉCRIT le système, donc ce qui peut le décrire faux.
 corpus = ([f'{H}/.claude/CLAUDE.md', f'{H}/.claude/DESIGN.md', f'{H}/.claude/MEMORY.md',
            f'{H}/.claude/HANDOFF.md', f'{H}/.claudeos/README.md']
-          + glob.glob(f'{H}/.claude/fiches/*.md')
           + glob.glob(f'{H}/.claude/skills/*/SKILL.md')
-          + glob.glob(f'{H}/resources/*.md')
-          + glob.glob(f'{H}/workstations/*/CLAUDE.md') + glob.glob(f'{H}/workstations/*/MEMORY.md')
-          + glob.glob(f'{H}/workstations/*/*/CLAUDE.md') + glob.glob(f'{H}/workstations/*/*/MEMORY.md')
-          + glob.glob(f'{H}/workstations/*/*/*/CLAUDE.md') + glob.glob(f'{H}/workstations/*/*/*/MEMORY.md')
-          + glob.glob(f'{H}/workstations/*/*/DESIGN.md') + glob.glob(f'{H}/workstations/*/*/*/DESIGN.md'))
+          + glob.glob(f'{H}/resources/*.md'))
+# Racines des workstations dérivées du MANIFESTE depuis le 2026-08-09, au lieu de
+# `$HOME/workstations` en dur : un domaine déclaré ailleurs échappait à la retombée
+# documentaire, donc son document pouvait décrire faux sans que rien ne le dise. La
+# PROFONDEUR reste figée (projet à 1, application à 2) — c'est une convention d'arborescence.
+for _live in os.environ.get('CLAUDEOS_WS_ROOTS', '').splitlines():
+    if not _live.strip(): continue
+    for _d in ('', '/*', '/*/*'):
+        corpus += glob.glob(f'{_live}{_d}/CLAUDE.md') + glob.glob(f'{_live}{_d}/MEMORY.md')
+    corpus += glob.glob(f'{_live}/*/DESIGN.md') + glob.glob(f'{_live}/*/*/DESIGN.md')
 mem = None
 for repo_sub, live in pairs:
     if repo_sub == 'system-memory':

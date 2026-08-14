@@ -1,3 +1,8 @@
+---
+name: livrables
+description: Produire un livrable destiné à un tiers — visuel ou structuré —, y avancer un fait chiffré ou sourcé, ou nommer des valeurs d'énumération, des libellés d'écran, des intitulés de spécification. Aussi quand une échéance devant un tiers approche sur un sujet hors du domaine de maîtrise technique de l'utilisateur.
+---
+
 # Règles — produire un livrable
 
 > Fiche situationnelle. Déclencheur : je produis quelque chose destiné à un tiers (mail client, spécification, doc formelle, instructions d'outil), un rendu visuel (deck, one-pager), un livrable structuré à fort enjeu, **ou je nomme les valeurs d'une énumération, les libellés d'un écran ou les intitulés d'une spécification**.
@@ -6,7 +11,7 @@
 ## Rédaction
 
 - Prose continue, registre adulte.
-- Éviter les tells IA : tirets cadratins en milieu de phrase, listes à deux-points en pleine prose, séries de phrases courtes hachées.
+- Phrases développées qui s'enchaînent, ponctuation de prose, listes réservées aux données. Un référentiel des motifs d'écriture générée se constitue à part de cette fiche — l'énumérer ici les rendrait disponibles au moment même où l'on écrit.
 - Ne s'applique pas au dialogue avec l'utilisateur, qui garde le ton de l'assistant.
 - **Premier jet.** Une fois l'ossature validée : une section rédigée à la qualité finale pour calibrer le ton et le niveau de détail, le reste en squelette. La voix se corrige une fois, pas sur vingt pages.
 

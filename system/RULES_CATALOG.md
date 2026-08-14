@@ -39,7 +39,7 @@ L'entretien ne pose pas quarante questions : il pose celles-ci, et chacune ouvre
 
 | Règle | Motif | Condition |
 | :--- | :--- | :--- |
-| **Deux portes d'admission, une seule suffit** — une règle entre dans `CLAUDE.md` si son omission ferait commettre une erreur dans une session qui ne charge rien d'autre, **ou** si c'est une chose qui ne peut pas se convoquer elle-même (identité, voix, conduite par défaut). Sinon → fiche sur déclencheur. | Sans critère d'admission, la couche payée à chaque session grossit sans fin et personne ne sait plus quoi en retirer. | `SOCLE` |
+| **Deux portes d'admission, une seule suffit** — une règle entre dans `CLAUDE.md` si son omission ferait commettre une erreur dans une session qui ne charge rien d'autre, **ou** si c'est une chose qui ne peut pas se convoquer elle-même (identité, voix, conduite par défaut). Sinon → compétence sur déclencheur. | Sans critère d'admission, la couche payée à chaque session grossit sans fin et personne ne sait plus quoi en retirer. | `SOCLE` |
 | **Pas de plafond chiffré** — c'est le critère d'admission qui décide, pas un quota. | Un quota fait arbitrer au caractère près et laisse entrer du hors-sujet tant qu'il reste de la place. | `SOCLE` |
 
 ## B. Mémoire et vérité
@@ -96,7 +96,8 @@ L'entretien ne pose pas quarante questions : il pose celles-ci, et chacune ouvre
 | **Mise en cause d'un objectif** | A-t-il le droit de contester le but et pas seulement la méthode, et sur quel périmètre. | `PERSONA` |
 | **Périmètre du caractère** | Pleine personnalité en dialogue, neutre dans tout livrable destiné à un tiers. Le fond reste constant, la forme module. | `PERSONA` + `LIVRABLE` |
 | **Humour** | S'il y en a, d'où il naît. | `PERSONA` |
-| **Forme de la voix** | Longueur, ordre (conclusion d'abord ou non), registre, tics proscrits, jargon traduit ou non. | `PERSONA` |
+| **Forme de la voix** | Longueur, ordre (conclusion d'abord ou non), registre, tics proscrits, jargon traduit ou non. **Déplacée hors du règlement le 2026-08-07** : la *forme* de la voix vit dans une compétence que le règlement ordonne de charger au premier tour, ne gardant qu'une puce d'honnêteté comme garde si la compétence ne se charge pas. La *persona* — identité, posture, conduite — reste au règlement, resserrée le même soir : un déplacement supplémentaire l'aurait sortie du compteur sans la sortir de la session, la compétence se chargeant de toute façon. Qui reprend ce système décide où il met la sienne — les deux emplacements marchent, ils n'ont pas le même coût : dans le règlement elle est payée à chaque session et sûre, dans une compétence elle est gratuite et dépend d'un chargement. | `PERSONA` |
+| **Où s'écrivent les documents que l'agent lit** | Une grille d'écriture s'applique aux fichiers d'instruction, de mémoire et de reprise, et **le déclencheur vit dans le frontmatter de la compétence qui la porte, pas dans le règlement** — un déclencheur logé là ne coûte rien à la couche payée à chaque session. Décidé le 2026-08-07. Exclusions à reprendre telles quelles : compétences empruntées à un amont (leur corps doit rester comparable), fichiers générés par script, entrée brute d'un journal, livrables destinés à un tiers. | `PERSONA` + `MEMOIRE` |
 
 ## F. Routage et domaines
 

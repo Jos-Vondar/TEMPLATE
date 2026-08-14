@@ -31,8 +31,8 @@ gen_auto() {
     echo "## 🗂 Squelette (auto-généré le $(date +%Y-%m-%d))"
     echo
 
-    echo "### Décisions stables — DESIGN.md / DESIGN.md"
-    find "${ROOTS[@]}" -not -path '*/.sync-backups/*' \( -name "DESIGN.md" -o -name "DESIGN.md" \) 2>/dev/null | sort | while read -r f; do
+    echo "### Décisions stables — DESIGN.md"
+    find "${ROOTS[@]}" -not -path '*/.sync-backups/*' \( -name "DESIGN.md" \) 2>/dev/null | sort | while read -r f; do
         [ -f "$f" ] || continue
         # Jointure par awk et NON par `paste -sd '·'`. Le délimiteur fait deux octets en
         # UTF-8, et certaines implémentations de `paste` traitent chaque OCTET d'un
@@ -53,7 +53,12 @@ gen_auto() {
     echo "### Journal & archives de session (par date)"
     for jf in "$MEM/SESSION_JOURNAL.md" "$MEM/SESSION_ARCHIVE.md"; do
         [ -f "$jf" ] || continue
-        echo "_$(relp "$jf") :_"
+        # Chemin neutre au poste, et non `relp` (2026-08-07) : le dossier de mémoire porte un
+        # slug dérivé du dossier personnel, donc différent d'une machine à l'autre. `relp` y
+        # écrivait le slug du poste générateur, et le fichier se synchronise tel quel — sur
+        # l'autre machine le chemin n'existe pas, et un agent qui le suit conclut à l'absence
+        # du journal. La convention `<MÉMOIRE>` est celle du règlement la conception
+        echo "_<MÉMOIRE>/$(basename "$jf") :_"
         grep -E '^## [0-9]{4}-[0-9]{2}-[0-9]{2}' "$jf" 2>/dev/null | sed -E 's/^## /  - /'
     done
     echo

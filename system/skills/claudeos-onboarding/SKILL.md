@@ -25,7 +25,7 @@ description: Entretien d'installation du système — à lancer UNE FOIS après 
 Quatre questions, une à la fois, par l'outil de question et jamais en prose. Chaque option porte sa conséquence.
 
 1. **Ton métier et ton contexte** — de quoi tu vis, dans quel type d'organisation. Ce qui détermine le vocabulaire que l'assistant peut employer sans traduire.
-2. **Ton rythme** — as-tu des créneaux de travail distincts, et lesquels. Ce qui permet de ne jamais te proposer un travail impossible dans le créneau courant.
+2. **Ton rythme** — as-tu des créneaux de travail distincts, et lesquels. Ce qui permet de ne jamais te proposer un travail impossible dans le créneau courant. La réponse a une seconde destination, machine celle-là : le fichier des créneaux, écrit en phase 2 une fois les domaines nommés — pas ici, un créneau se rattache à un domaine.
 3. **Ton niveau technique, par domaine** — où tu es expert, où tu es débutant. Ce qui détermine quand l'assistant explique et quand il se tait.
 4. **Ce qui t'agace chez un assistant** — question ouverte, en prose, la seule de tout l'entretien. C'est celle qui rendra le persona juste, et un menu d'options y présupposerait justement ce qu'on cherche.
 
@@ -41,7 +41,7 @@ Elles décident quelles règles entrent. Poser les quatre, même si une réponse
 | :--- | :--- | :--- |
 | Travailles-tu depuis plusieurs machines ? | `MULTIPOSTE` | Les règles de séquencement — un seul poste actif, tirer avant de produire, ne jamais sauvegarder depuis un poste en retard. Et l'interdiction des chemins propres à une machine. |
 | As-tu plusieurs domaines de travail bien distincts ? | `MULTIDOMAINE` | La table de routage et ses règles de chargement. Sans elle, une seule couche de règles pour tout. |
-| Produis-tu des documents destinés à d'autres que toi ? | `LIVRABLE` | La fiche des livrables, et la règle de bascule en ton neutre. |
+| Produis-tu des documents destinés à d'autres que toi ? | `LIVRABLE` | La compétence des livrables, et la règle de bascule en ton neutre. |
 | Manipules-tu des documents que tu ne peux pas versionner ? | `CONFIDENTIEL` | Le réceptacle local et ses règles de suppression. |
 
 **Ce qui n'est pas demandé, et pourquoi.** La mémoire, la plomberie et le code sont tenus pour vrais : le moteur est livré et l'installation a posé ses hooks, donc « non » n'est pas une réponse possible. Le proxy économe est détecté par le script. **Les règles sur les secrets et le recontrôle des rapports d'agents ne sont jamais conditionnées** — quelqu'un qui répond « je ne manipule pas de secrets » et colle un jeton trois semaines plus tard n'aurait aucune règle au moment précis où l'absence de règle est définitive.
@@ -74,6 +74,12 @@ Aux niveaux intermédiaires, ne créer que ce qui a un contenu propre : un nivea
 
 **Et une ligne au manifeste de sauvegarde pour chacun.** C'est l'étape qu'on oublie, et son oubli ne se manifeste par rien : le dossier existe, on y travaille, il n'est simplement jamais sauvegardé. Vérifier après création que chaque domaine y figure.
 
+### Les créneaux
+
+Reprendre la réponse « rythme » de la phase 1 et l'écrire dans `~/.claudeos/engine/config/CRENEAUX` — une ligne par domaine qui a des jours attitrés, au format que le fichier documente en tête : `NOM_DU_DOMAINE  lun,mar`. Un domaine sans jours attitrés ne reçoit pas de ligne : absent du fichier, il est proposable tous les jours. Sans domaine du tout, le fichier reste vide — rien à filtrer.
+
+C'est ce fichier que les scripts lisent : le bilan de démarrage y prend le filtre du jour, le générateur de fils ouverts l'unité d'ancienneté. Le fichier de mémoire écrit en phase 1 porte le rythme en prose, comme fait durable — jamais comme source des scripts ; un changement de rythme se pose d'abord ici.
+
 ## Phase 3 — Quel assistant tu veux
 
 Invoquer la compétence de grill. Douze rubriques, dont les énoncés génériques sont déjà dans le fichier de règles ; l'entretien remplit le réglage de chacune.
@@ -95,13 +101,13 @@ bash ~/.claudeos/engine/assemble-rules.sh --vraies MULTIDOMAINE,CONFIDENTIEL
 La liste ne contient que les conditions **vraies**, séparées par des virgules, éventuellement vide. Le script :
 
 - retire les blocs dont la condition est fausse, et **les marqueurs des blocs conservés** ;
-- retire les fiches devenues sans objet **et leur ligne de déclencheur ensemble** — une fiche non routée ne se charge jamais, une ligne de déclencheur sans fiche envoie vers le vide, ce sont les deux moitiés du même défaut ;
+- retire les compétences devenues sans objet **et leur ligne de déclencheur ensemble** — une ligne de déclencheur sans compétence envoie vers le vide, une compétence hors de la carte de rappel a perdu son déclencheur visible, ce sont les deux moitiés du même défaut ;
 - refuse une condition inconnue plutôt que de l'ignorer, parce qu'une faute de frappe retirerait en silence le bloc qu'on voulait garder ;
 - vérifie qu'aucun marqueur ne subsiste, et échoue s'il en reste.
 
-Lire son compte rendu : il dit combien de blocs sont conservés, lesquels sont retirés, et quelles fiches sont parties.
+Lire son compte rendu : il dit combien de blocs sont conservés, lesquels sont retirés, et quelles compétences sont parties.
 
-**Ce qui reste à faire à la main après lui** : remplir la table de routage et le bloc persona. **Ne pas renuméroter les sections** — les fiches y renvoient par numéro, et une section déplacée casse un renvoi en silence.
+**Ce qui reste à faire à la main après lui** : remplir la table de routage et le bloc persona. **Ne pas renuméroter les sections** — les compétences y renvoient par numéro, et une section déplacée casse un renvoi en silence.
 
 ### Recalibrer les alarmes de poids
 
@@ -119,7 +125,7 @@ Ne jamais le relancer pour faire taire une alarme : une alarme qui sonne demande
 bash ~/.claudeos/engine/selftest.sh
 ```
 
-Il vérifie notamment que toute fiche présente est routée et que tout chemin cité par une règle existe. C'est le contrôle qui attrape ce que l'assemblage a pu casser.
+Il vérifie notamment que les compétences présentes et la carte de rappel se répondent, et que tout chemin cité par une règle existe. C'est le contrôle qui attrape ce que l'assemblage a pu casser.
 
 ## Phase 5 — La preuve
 

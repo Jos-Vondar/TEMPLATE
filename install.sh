@@ -252,10 +252,13 @@ printf '%s\n' "$(printf '%s' "$REMOTE_URL" | sed 's#.*[:/]\([^/]*/[^/]*\)\.git#\
 printf '# Registre des postes — <hostname>  <id court>  <label>\n%s  poste-1  Premier poste\n' "$(hostname)" \
     > "$DEPOT/engine/config/SYNC_MACHINES"
 cp "$RACINE/system/"*.md "$HOME/.claude/" 2>/dev/null
-mkdir -p "$HOME/.claude/fiches" "$HOME/.claude/skills"
-cp "$RACINE/system/fiches/"*.md "$HOME/.claude/fiches/" 2>/dev/null
+mkdir -p "$HOME/.claude/skills" "$HOME/.claude/output-styles"
 cp -r "$RACINE/system/skills/"* "$HOME/.claude/skills/" 2>/dev/null
-ok "configuration du moteur régénérée, règles et fiches en place"
+# Le style de sortie fourni est POSÉ, jamais activé : activer une voix est un choix de la
+# personne, pas de l'installation. Aucune écriture de `outputStyle` dans ses réglages —
+# le README dit comment l'allumer.
+cp "$RACINE/system/output-styles/"*.md "$HOME/.claude/output-styles/" 2>/dev/null
+ok "configuration du moteur régénérée, règles et compétences en place"
 
 # L'EMPREINTE DE DÉPART, sans laquelle aucune mise à jour n'est possible plus tard.
 # Elle enregistre ce que CETTE version a posé, fichier par fichier. Sans elle, la commande
@@ -305,6 +308,18 @@ resources    resources    mirror
 docs         docs         mirror
 MANIFESTE
 ok "manifeste créé"
+fi
+
+# Les artefacts de configuration qui naissent vides chez la personne — le fichier des
+# créneaux hebdomadaires en tête. Ils sont décrits en UN SEUL LIEU, engine/provision-config.sh,
+# parce que deux chemins doivent les poser : cette installation, et update.sh chez qui met à
+# jour sans réinstaller — sans ce second appelant, une mise à jour laissait l'autotest en
+# défaut (contrôle 27 : chemin cité par une règle mais jamais posé) et la sauvegarde refusée.
+# Le script est idempotent : il ne crée que ce qui manque, il n'écrase aucune décision locale.
+if bash "$RACINE/engine/provision-config.sh" >/dev/null 2>&1; then
+    ok "artefacts de configuration posés (créneaux hebdomadaires, listes blanches)"
+else
+    printf '    ⚠ rattrapage de configuration en échec — l'\''autotest dira ce qui manque.\n'
 fi
 
 # Le fichier d'exclusion de la COPIE. Distinct du verrou git : le verrou décide de ce qui
@@ -408,6 +423,12 @@ cat > "$DEPOT/.gitignore" <<'VERROU'
 # n'auraient rien fait, et le fichier aurait eu l'air correct.
 engine/*.log
 engine/.last-offline-backup
+# Le marqueur de dernière activité : écrit par la sauvegarde ENTRE la mise en file et le
+# push. Non exclu, il est suivi dès la deuxième sauvegarde puis modifié après le commit,
+# et le `pull --rebase` refuse — troisième sauvegarde impossible, exercé sur pièce le
+# 2026-08-14 en rejouant deux sauvegardes sur une installation factice. Le moteur le
+# déclare « local, jamais sauvegardé » : cette ligne rend le verrou conforme à sa doctrine.
+engine/.derniere-activite
 # LOCAL PAR DÉCISION, et exclu NOMMÉMENT pour cette raison. Le réceptacle des secrets de
 # faible valeur ne voyage pas : un système livré ne pousse pas des secrets dans un dépôt à
 # la place de quelqu'un qui n'a pas pesé ce choix. Il reste donc sur chaque machine, et il
@@ -419,8 +440,10 @@ engine/.last-offline-backup
 # défaut = oublié. La ligne dit lequel des deux.
 system/secrets-shared/
 !system/*.md
-!system/fiches/*.md
 !system/plans/*.md
+# Les styles de sortie de l'outil : fournis par le squelette, à toi ensuite. Sans cette
+# ligne, un style ajouté ou modifié resterait sur une seule machine, en silence.
+!system/output-styles/*.md
 # `settings.json` porte les réglages EFFECTIFS de l'outil — déclencheurs, permissions. La
 # liste blanche de `system/` ne connaissait que `*.md`, donc le seul fichier qui décrit le
 # comportement réel de l'installation ne partait pas : une machine restaurée depuis le dépôt
@@ -525,22 +548,12 @@ fi
 if command -v rtk >/dev/null 2>&1; then
     rtk init -g >/dev/null 2>&1 && ok "hook de réécriture posé (redémarre Claude Code pour l'activer)" \
         || printf '    ⚠ hook non posé — lance `rtk init -g` à la main.\n'
-    # `rtk init -g` ÉCRIT ~/.claude/RTK.md — une trentaine de lignes en anglais. Ce fichier
-    # est chargé à CHAQUE session : il pèse sur toutes, pour une information dont on n'a
-    # besoin que le jour où le proxy casse. On le remplace par un pointeur de deux lignes,
-    # tout de suite, et pour une raison qui va au-delà du poids : sans ce geste, c'est la
-    # version longue que la première sauvegarde consacre comme référence, et la procédure
-    # de dépannage — « restaure notre version depuis le dépôt » — restaure alors exactement
-    # ce qu'elle prétend corriger. Une procédure qui se trompe de cible est pire que pas de
-    # procédure : elle donne le sentiment d'avoir réparé.
-    if [ -f "$HOME/.claude/RTK.md" ]; then
-        cat > "$HOME/.claude/RTK.md" <<'RTKPTR'
-# RTK — proxy économe en jetons
-
-Rien à faire en travail courant : un déclencheur réécrit les commandes prises en charge. Mesure des gains, panne, ou `rtk` absent → `fiches/RTK_DEPANNAGE.md`.
-RTKPTR
-        ok "RTK.md réduit à un pointeur (la version longue de l'outil pèse sur chaque session)"
-    fi
+    # LE RTK.md QUE L'OUTIL ÉCRIT EST GARDÉ TEL QUEL (aligné le 2026-08-14 sur la décision
+    # du 2026-08-10 côté auteur). L'installation posait ici un pointeur court à sa place ;
+    # la compétence de dépannage livrée dit désormais l'inverse — laisser `rtk init -g`
+    # faire son travail, rien à restaurer après une montée de version — et un système qui
+    # installe une chose pendant que sa doctrine en prescrit une autre livre une
+    # contradiction. Coût assumé : la version de l'outil pèse sur chaque session.
 fi
 
 # --- 7bis. Premier commit ---------------------------------------------------
@@ -636,14 +649,17 @@ voulus = {
                     "statusMessage": "Vérification mensuelle des compétences empruntées...",
                     "async": False}]},
     ],
-    "Stop": [
-        {"hooks": [{"type": "command",
-                    "command": 'bash "$HOME/.claudeos/engine/clean-ads.sh" || true',
-                    "async": True}]},
-    ],
+    # PAS de déclencheur `Stop` → clean-ads : le nettoyage des flux Windows est appelé par
+    # `backup.sh` avant la capture — une fois par sauvegarde suffit, c'est l'en-tête du
+    # script lui-même qui le dit, et l'autotest garde cet appelant (contrôle 20). Le hook
+    # le faisait tourner à CHAQUE tour d'assistant sur tout le périmètre du manifeste :
+    # vestige d'avant la migration, retiré du gabarit le 2026-08-14.
     "SessionEnd": [
+        # La garde de portée : une session de projet (ouverte dans tmux par le script de
+        # session) ne sauvegarde pas, la sauvegarde appartient à la session principale.
+        # Sans elle, le script de session promet un comportement que le hook n'a pas.
         {"hooks": [{"type": "command",
-                    "command": 'bash "$HOME/.claudeos/engine/backup.sh" >> "$HOME/.claudeos/engine/backup-hook.log" 2>&1 || true',
+                    "command": 'if [ "${OS_SESSION_SCOPE:-}" = "projet" ]; then echo "[backup-hook] session de projet — sauvegarde sautee, elle appartient a la session principale" >> "$HOME/.claudeos/engine/backup-hook.log"; exit 0; fi; bash "$HOME/.claudeos/engine/backup.sh" >> "$HOME/.claudeos/engine/backup-hook.log" 2>&1 || true',
                     "timeout": 300}]},
     ],
 }

@@ -1,13 +1,18 @@
+---
+name: rtk-depannage
+description: Une commande passée par le proxy économe échoue, rend un résultat de travers, `rtk` est introuvable, ou l'on veut mesurer ses gains.
+---
+
 # Le proxy économe en jetons (rtk) — mesure et dépannage
 
 > Fiche situationnelle. Déclencheur : une commande passée par le proxy échoue, se comporte de travers, `rtk` semble absent alors qu'il devrait être là, ou l'on veut mesurer ce que le proxy fait gagner.
 
 ## Ce qu'il est, et les commandes de mesure
 
-Rust Token Killer. Il économise 60 à 90 % des jetons sur les opérations de développement, et le déclencheur d'avant-appel réécrit pour moi les commandes prises en charge (`git status` → `rtk git status`) : rien à retenir en travail courant. Sorti du fichier chargé à chaque session pour financer cinq règles de conduite.
+Rust Token Killer. Il économise 60 à 90 % des jetons sur les opérations de développement, et le déclencheur d'avant-appel réécrit pour moi les commandes prises en charge (`git status` → `rtk git status`) : rien à retenir en travail courant.
 
 Les commandes de mesure s'appellent toujours **directement**, le proxy ne les réécrit pas : `rtk gain` (gains mesurés), `rtk gain --history` (historique d'usage), `rtk discover` (occasions manquées, d'après l'historique de session). Rappel de la carte complète : ces compteurs sont propres à la machine courante et hors sauvegarde — un chiffre lu ici ne dit rien de l'autre poste.
-> En travail courant il n'y a rien à savoir : le déclencheur d'avant-appel réécrit les commandes prises en charge, sans coût. Cette fiche ne sert qu'au moment où ça casse. Sortie du fichier chargé à chaque session, pour cette raison.
+> En travail courant il n'y a rien à savoir : le déclencheur d'avant-appel réécrit les commandes prises en charge, sans coût. Cette fiche ne sert qu'au moment où ça casse.
 
 ## Mettre à jour — et le piège qui va avec
 
@@ -16,18 +21,19 @@ curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/instal
 rtk init -g      # remet le déclencheur à jour
 ```
 
-**`rtk init -g` ÉCRASE `~/.claude/RTK.md`** par la version que l'outil livre : vingt-neuf lignes en anglais, là où la version posée à l'installation en fait deux et renvoie ici.
+**`rtk init -g` ÉCRASE `~/.claude/RTK.md`** par la version que l'outil livre — la version longue de l'outil, en anglais.
 
-Ce n'est pas cosmétique. Ce fichier est chargé à **chaque** session, et la reprise du fichier d'origine a fait repasser la couche toujours-chargée au-dessus de son seuil. L'alarme de poids l'a signalé dans la minute — c'est elle qui a rendu la régression visible, rien d'autre ne l'aurait fait.
+**Décision : on garde la version de l'outil.** Elle porte deux rappels que la nôtre n'avait pas — la collision de nom et les commandes de vérification d'installation — et le plafond absolu de la couche par session a été retiré, donc l'écart de poids ne bloque plus rien. **Il n'y a donc plus rien à restaurer après une montée de version** : laisser `rtk init -g` faire son travail.
 
-**Après toute mise à jour du proxy, restaurer la version courte** — l'installation l'a posée, la sauvegarde la garde au dépôt :
+Ce qu'il faut quand même faire après toute montée :
 
 ```bash
-cp ~/.claudeos/system/RTK.md ~/.claude/RTK.md
-bash ~/.claudeos/engine/selftest.sh | grep couche   # vérifier le retour sous le seuil
+bash ~/.claudeos/engine/selftest.sh | grep -i couche   # la dérive 7 j reste surveillée
 ```
 
 Redémarrer Claude Code ensuite : le déclencheur ne reprend qu'au lancement suivant.
+
+**Ce que cette décision a remplacé, pour ne pas le rejouer.** La consigne précédente était l'inverse — restaurer une version courte maison après chaque montée. Motif d'alors : lors d'une montée de version, la reprise du fichier livré avait fait passer la couche toujours-chargée **au-dessus de son seuil**, et l'alarme de poids l'avait signalé dans la minute. Le motif est tombé avec le seuil, pas avec le fait : le fichier livré est toujours cinq fois plus lourd, et c'est une dépense assumée.
 
 ## Vérifier l'installation
 

@@ -16,17 +16,135 @@
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
 
-python3 - "$MEM" "$HOME" "$(date +%Y-%m-%d)" <<'PYEOF'
+python3 - "$MEM" "$HOME" "$(date +%Y-%m-%d)" "$CFG/CRENEAUX" "$(claudeos_ws_roots)" <<'PYEOF'
 import os, re, sys, glob, datetime
 
-MEM, H, TODAY = sys.argv[1], sys.argv[2], sys.argv[3]
+MEM, H, TODAY, CRENEAUX = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 today = datetime.date.fromisoformat(TODAY)
+
+# Racines des workstations dérivées du MANIFESTE depuis le 2026-08-09 (claudeos_ws_roots) :
+# `$HOME/workstations` en dur ici aurait rendu invisible la reprise d'une workstation
+# déclarée ailleurs — un fichier bien écrit que rien ne ratisse, le défaut silencieux déjà
+# payé le 2026-08-05 sur le niveau application.
+WS_ROOTS = {os.path.basename(r): r for r in sys.argv[5].splitlines() if r.strip()}
 
 def age(d):
     try: return (today - datetime.date.fromisoformat(d)).days
     except Exception: return None
 
+# ------------------------------------------------------- créneaux hebdomadaires --
+# Ajouté le 2026-08-09 (le document de conception, conçu le 2026-07-25). L'ancienneté d'un fil
+# rattaché à un créneau se mesure en CRÉNEAUX MANQUÉS, pas en jours calendaires :
+# « trois créneaux sans avancer » est un fait, « dix-neuf jours de retard » est un
+# artefact d'unité, qui fait passer un calendrier pour de la négligence.
+#
+# L'attribution d'un fil à un domaine se fait sur les noms DÉCLARÉS — le nom de la
+# workstation et celui de ses projets, lus sur le disque — et jamais par inférence de
+# sujet. Limite assumée, à ne pas prendre pour un bug : un fil qui ne nomme ni son
+# domaine ni son projet (le projet sans son domaine) reste en jours calendaires.
+# Sur-attribuer serait pire que sous-attribuer : un fil rangé dans le mauvais créneau
+# cesse d'être proposé les jours où il est justement faisable.
+DAYS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim']
+DAYNAME = {'lun': 'lundi', 'mar': 'mardi', 'mer': 'mercredi', 'jeu': 'jeudi',
+           'ven': 'vendredi', 'sam': 'samedi', 'dim': 'dimanche'}
+
+creneaux = {}     # workstation -> [indices de jours de la semaine, 0 = lundi]
+try:
+    for line in open(CRENEAUX, encoding='utf-8'):
+        line = line.split('#', 1)[0].strip()
+        if not line: continue
+        f = line.split()
+        if len(f) < 2: continue
+        idx = sorted({DAYS.index(j) for j in f[1].split(',') if j in DAYS})
+        if idx: creneaux[f[0]] = idx
+except OSError:
+    pass
+
+# Mots qui rattachent un fil à un domaine : le nom de la workstation (avec ses
+# variantes de séparateur) et le nom de chacun de ses PROJETS. On s'arrête au niveau
+# projet : les dossiers d'application portent déjà le nom du projet en préfixe, et
+# descendre plus bas n'ajoute que des motifs longs sans nouveau discriminant.
+attrib = {}       # motif en minuscules -> workstation
+for ws in creneaux:
+    base = ws.lower()
+    for v in {base, base.replace('_', ' '), base.replace('_', '-')}:
+        attrib[v] = ws
+    try:
+        root = WS_ROOTS[ws]
+        for p in sorted(os.listdir(root)):
+            if os.path.isdir(f'{root}/{p}') and len(p) >= 4:
+                attrib[p.lower()] = ws
+    except (OSError, KeyError):
+        pass
+ATTRIB_RE = [(re.compile(r'(?<![a-z0-9])' + re.escape(k) + r'(?![a-z0-9])', re.I), w)
+             for k, w in sorted(attrib.items(), key=lambda kv: -len(kv[0]))]
+
+def domain(text):
+    """Workstation à créneau que ce fil nomme, ou None."""
+    for rx, ws in ATTRIB_RE:
+        if rx.search(text): return ws
+    return None
+
+def missed(since, days):
+    """Jours de créneau écoulés entre l'ouverture du fil et aujourd'hui, tous deux exclus.
+
+    Le jour d'ouverture n'est pas manqué (le fil y est né), et aujourd'hui ne l'est pas
+    encore — c'est l'occasion en cours. Sans ces deux bornes, la vue annonce un créneau
+    manqué le jour même où le travail est faisable.
+    """
+    try: d = datetime.date.fromisoformat(since) + datetime.timedelta(days=1)
+    except Exception: return None
+    n = 0
+    while d < today:
+        if d.weekday() in days: n += 1
+        d += datetime.timedelta(days=1)
+    return n
+
+def creneau_cell(ws, since):
+    """« DOMAINE · 3 créneaux » — le domaine, puis l'ancienneté dans son unité."""
+    days = creneaux[ws]
+    n = missed(since, days)
+    if n is None: return ws
+    if len(days) == 1:
+        unit = DAYNAME[DAYS[days[0]]] + ('s' if n != 1 else '')
+    else:
+        unit = 'créneaux' if n != 1 else 'créneau'
+    return f'{ws} · {n} {unit}'
+
 # ------------------------------------------------------------- récolte brute --
+# Phrases-méta : tournures que le journal écrit DANS son paragraphe de fils ouverts pour dire
+# que rien n'a bougé, ou pour renvoyer ailleurs. Ce ne sont pas des sujets, donc first_seen()
+# ne doit pas leur donner d'âge — le recouvrement de vocabulaire les appariait de séance en
+# séance et rendait un « fil de 37 jours » qui n'avait aucun objet (constaté le 2026-08-09,
+# corrigé à la passe du 2026-08-10). Le vieillissement était le symptôme ; la cause est
+# qu'une phrase d'état de la liste était comptée comme un élément de la liste.
+#
+# Ancré au DÉBUT de l'élément, et sur des tournures nommées une par une : un motif large
+# écarterait des fils réels. Ce filtre est un poste de perte silencieuse — tout ajout ici se
+# vérifie sur un fil réel qui doit survivre, pas seulement sur l'artefact qui doit tomber.
+# Le journal l'écrit à la fin de son paragraphe et l'accole au fil précédent par un POINT,
+# pas par un point-virgule : elle n'est donc jamais un élément à part, et un filtre ancré au
+# début de l'élément ne la voit pas. Elle se retire par la queue — de son ouverture de phrase
+# jusqu'au bout de l'élément. Constaté sur jeu d'essai le 2026-08-10, la première version du
+# filtre laissant l'artefact intact.
+META_QUEUE = re.compile(r'(?:(?<=\.)|(?<=\.\s)|^)\s*'
+                        r'(?:fils?\s+(?:ouverts?\s+)?ant[ée]rieurs?\b'
+                        r'|(?:la\s+)?passe\s+hebdo(?:madaire)?\s+(?:est\s+)?due\b)'
+                        r'.*$', re.I | re.S)
+
+def strip_meta(p):
+    """Élément privé de sa queue de phrase-méta, chaîne vide s'il n'en restait que ça.
+
+    Une phrase d'ÉTAT de la liste (« fils antérieurs inchangés », « passe hebdomadaire due »)
+    n'est pas un élément de la liste. Laissée en place, first_seen() l'apparie de séance en
+    séance par recouvrement de vocabulaire et vieillit le fil qui la porte : c'est ce qui a
+    produit le « fil de 37 jours » sans objet du 2026-08-09.
+
+    Poste de perte silencieuse : tout ajout de motif ici se vérifie sur un fil réel qui doit
+    SURVIVRE, jamais seulement sur l'artefact qui doit tomber.
+    """
+    return META_QUEUE.sub('', p).strip(' .;—-')
+
 def prose_items(block):
     """Items d'un paragraphe de fils ouverts rédigé en prose, séparés par des points-virgules."""
     txt = re.sub(r'\s+', ' ', ' '.join(l.strip() for l in block.splitlines() if l.strip())).strip()
@@ -34,6 +152,7 @@ def prose_items(block):
     out = []
     for p in re.split(r'\s*;\s*', txt):
         p = re.sub(r'^(?:et|puis|enfin|ainsi que)\s+', '', p.strip(' .'), flags=re.I)
+        p = strip_meta(p)
         if len(p) > 20: out.append(p)
     return out
 
@@ -59,7 +178,7 @@ def bullets(block):
         elif line.startswith(('**', '#', '---')):
             if cur: out.append(cur); cur = None
     if cur: out.append(cur)
-    items = [b for b in out if len(b) > 20]
+    items = [s for s in (strip_meta(b) for b in out) if len(s) > 20]
     return items if items else prose_items(block)
 
 # Le marqueur porte un libellé variable (« Fils ouverts », « Fils ouverts à la clôture ») et,
@@ -73,8 +192,29 @@ def bullets(block):
 # Le titre ne se duplique pas en « Fils ouverts, système » exprès : deux listes du même état
 # à deux âges se contredisent (CLAUDE.md §1, règle de tri). Ancré en début de ligne, donc une
 # occurrence en cours de phrase ne déclenche rien.
-FILS = re.compile(r'^\*{0,2}#{0,3}\s*(?:Fils ouverts|Reste à faire)\b[^\n]*?(?:\*{0,2}\s*:\s*|$)(.*?)'
-                  r'(?=^\*\*[A-ZÀ-Ü]|^#{2,3} |\Z)', re.M | re.S)
+# ÉLARGI le 2026-08-12, sur mesure. Le motif ne reconnaissait que ces deux titres exacts, et
+# huit reprises sur seize en portaient d'autres — donc invisibles dans la vue du matin. Le pire
+# cas mesuré : un projet tenait CINQ sections « Fil ouvert » au SINGULIER, dont une
+# marquée PRIORITAIRE avec rappel au démarrage. Une lettre de différence, cinq fils perdus.
+# Ce qui entre : le singulier des deux familles, « À faire », « Points ouverts », « À trancher ».
+# Ce qui N'ENTRE PAS, et c'est délibéré : la liste des synonymes n'est pas énumérable — on ne
+# devinera jamais toutes les façons d'écrire « à faire », et l'élargir sans fin ferait entrer du
+# faux (le balayage de mesure a déjà pris « Deux outils du greffon découverts » pour un fil).
+# C'est pourquoi l'élargissement va de pair avec le contrôle #26 de `selftest.sh`, qui AVERTIT
+# quand une reprise porte une section d'allure « fils ouverts » non reconnue. Le motif attrape le
+# courant, l'alarme rattrape le reste : sans elle, le défaut redevient silencieux au premier
+# titre inventé.
+# LA LIGNE À NE PAS FRANCHIR, pour que l'élargissement ne devienne pas une pente. On accepte
+# les VARIANTES GRAMMATICALES d'une même phrase — singulier/pluriel, et la tête relative
+# « Ce qui » que le français met devant (« Ce qui reste à faire » est la même phrase que
+# « Reste à faire », pas une autre). On n'accepte PAS de nouveau synonyme : « À confirmer »,
+# « En attente », « Ouvert / non tranché » désignent la même chose dans une autre langue, et
+# les admettre relance l'énumération sans fin. Ces cas-là se RENOMMENT, et c'est le contrôle
+# #26 de `selftest.sh` qui les nomme un par un.
+FILS = re.compile(r'^\*{0,2}#{0,3}\s*(?:Ce qui )?'
+                  r'(?:Fils? ouverts?|Reste à faire|À faire|Points? ouverts?|À trancher)'
+                  r'\b[^\n]*?(?:\*{0,2}\s*:\s*|$)(.*?)'
+                  r'(?=^\*\*[A-ZÀ-Ü]|^#{2,3} |\Z)', re.M | re.S | re.I)
 
 # 1) Journal (état vivant) et archives (pour dater la première apparition)
 sessions = []
@@ -117,9 +257,11 @@ handoffs = []
 # formée, et invisible dans la vue du matin. Défaut silencieux par construction : rien ne
 # signale qu'un fichier bien écrit n'est pas ratissé. Choix assumé de faire descendre le
 # lecteur plutôt que de remonter le contenu — la reprise reste au niveau où le travail a lieu.
-for f in sorted(glob.glob(f'{H}/.claude/HANDOFF.md') + glob.glob(f'{H}/workstations/*/HANDOFF.md')
-                + glob.glob(f'{H}/workstations/*/*/HANDOFF.md')
-                + glob.glob(f'{H}/workstations/*/*/*/HANDOFF.md')):
+_hf = [(f'{H}/.claude/HANDOFF.md', None)]
+for _ws, _root in WS_ROOTS.items():
+    for _pat in ('HANDOFF.md', '*/HANDOFF.md', '*/*/HANDOFF.md'):
+        _hf += [(f, _ws) for f in glob.glob(f'{_root}/{_pat}')]
+for f, ws in sorted(_hf, key=lambda t: t[0]):
     if '.sync-backups' in f: continue
     try: txt = open(f, encoding='utf-8').read()
     except OSError: continue
@@ -127,7 +269,8 @@ for f in sorted(glob.glob(f'{H}/.claude/HANDOFF.md') + glob.glob(f'{H}/workstati
     lvl = os.path.relpath(os.path.dirname(f), H).replace('.claude', 'système')
     for fm in FILS.finditer(txt):
         for b in bullets(fm.group(1)):
-            handoffs.append({'level': lvl, 'text': b, 'maj': maj.group(1) if maj else None})
+            handoffs.append({'level': lvl, 'ws': ws, 'text': b,
+                             'maj': maj.group(1) if maj else None})
 
 # 3) Rappels datés : la seule source à échéance explicite
 reminders = []
@@ -188,8 +331,10 @@ for s in sorted(live, key=lambda x: x['date'], reverse=True):
             break
     else:
         since, rec = first_seen(s['text'], s['date'])
+        ws = domain(s['text'])
         items.append({'text': s['text'], 'since': since, 'age': age(since),
-                      'recur': rec, 'gest': gesture(s['text']), 'tk': tk})
+                      'recur': rec, 'gest': gesture(s['text']), 'tk': tk,
+                      'cren': creneau_cell(ws, since) if ws else None})
 items.sort(key=lambda i: (-(i['age'] or 0), -i['recur']))
 
 L = ['# OPEN THREADS — ce qui reste à faire, par ancienneté', '',
@@ -202,7 +347,13 @@ L = ['# OPEN THREADS — ce qui reste à faire, par ancienneté', '',
      '>',
      "> Le geste attendu est déduit du texte : **relancer** quand la balle est chez quelqu'un",
      "> d'autre, **trancher** quand une décision suffit, **faire** sinon. C'est une heuristique,",
-     '> pas un jugement : elle sert à ne pas proposer comme travail du jour ce qui attend un tiers.', '']
+     '> pas un jugement : elle sert à ne pas proposer comme travail du jour ce qui attend un tiers.',
+     '>',
+     "> La colonne **Créneau** nomme le domaine à créneau hebdomadaire que le fil cite, et son",
+     "> ancienneté dans l'unité de ce créneau (« 3 créneaux »). Elle est vide quand le fil ne",
+     '> nomme aucun domaine à créneau : son âge reste alors en jours calendaires. Un fil hors',
+     "> créneau reste listé et daté — c'est le démarrage qui écarte de la PROPOSITION du jour ce",
+     '> qui est impossible aujourd’hui, en relisant `engine/config/CRENEAUX`.', '']
 
 if due:
     L += ['## Échéances dépassées', '']
@@ -218,11 +369,12 @@ if pending:
     L.append('')
 
 L += ['## Fils ouverts du journal', '',
-      '| Âge | Depuis | Reconduit | Geste | Fil |', '| ---: | :--- | ---: | :--- | :--- |']
+      '| Âge | Depuis | Reconduit | Créneau | Geste | Fil |',
+      '| ---: | :--- | ---: | :--- | :--- | :--- |']
 for i in items:
     txt = re.sub(r'\s+', ' ', i['text'])[:190]
     rec = f"{i['recur']}×" if i['recur'] > 1 else '—'
-    L.append(f"| {i['age']} j | {i['since']} | {rec} | {i['gest']} | {txt} |")
+    L.append(f"| {i['age']} j | {i['since']} | {rec} | {i['cren'] or '—'} | {i['gest']} | {txt} |")
 L.append('')
 
 if handoffs:
@@ -232,7 +384,11 @@ if handoffs:
         if h['level'] != cur:
             cur = h['level']
             m = f" (reprise écrite le {h['maj']})" if h['maj'] else ''
-            L += ['', f'**{cur}**{m}', '']
+            # Le créneau se lit ici de la WORKSTATION du fichier, pas du texte du fil :
+            # l'attribution est certaine et n'a pas à être devinée.
+            c = f" · créneau {','.join(DAYS[d] for d in creneaux[h['ws']])}" \
+                if h['ws'] in creneaux else ''
+            L += ['', f'**{cur}**{m}{c}', '']
         L.append(f"- {re.sub(chr(92)+'s+', ' ', h['text'])[:210]}")
     L.append('')
 
@@ -246,10 +402,10 @@ L += ['## Proposition', '',
       'à ce que tu sais du contexte, qui n\'est pas dans ces fichiers.', '']
 for i in top:
     L.append(f"- **{i['gest'].capitalize()}** — {re.sub(chr(92)+'s+',' ',i['text'])[:160]} "
-             f"(ouvert depuis {i['age']} j)")
+             f"(ouvert depuis {i['age']} j{', ' + i['cren'] if i['cren'] else ''})")
 for i in relance:
     L.append(f"- **Relancer** (la balle n'est pas chez toi) — {re.sub(chr(92)+'s+',' ',i['text'])[:160]} "
-             f"(depuis {i['age']} j)")
+             f"(depuis {i['age']} j{', ' + i['cren'] if i['cren'] else ''})")
 if not top and not relance:
     L.append('- Rien d\'ancien en attente.')
 

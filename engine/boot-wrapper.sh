@@ -7,6 +7,8 @@
 # Vit dans le repo de config → synchronisé entre machines ; seul le `source` dans
 # ~/.bashrc reste manuel par machine.
 
+
+
 claude() {
     # Mode headless (claude -p / --print) : pas d'injection, sortie potentiellement pipée.
     case " $* " in

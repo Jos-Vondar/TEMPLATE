@@ -37,6 +37,27 @@ claudeos_drift() {
 }
 
 # =============================================================================
+# claudeos_refused_by_lock : émet un chemin de dépôt par ligne — les fichiers présents dans
+# l'arbre du dépôt et refusés par la RÈGLE DU VERROU (`*`) de `.gitignore`. Les journaux et
+# verrous exclus NOMMÉMENT avant le verrou sont écartés : ils sont refusés par décision, les
+# remonter ferait du bruit qu'on apprend à ignorer.
+#
+# On n'imite pas git, on l'interroge : `check-ignore -v` dit par QUELLE règle chaque fichier
+# est refusé, et c'est la règle citée qui discrimine — un motif `*` en fin de champ.
+#
+# EXTRAITE de backup.sh le 2026-08-09 pour un second appelant, `boot-check.sh`. Motif :
+# le refus du verrou n'était annoncé qu'au moment de la sauvegarde, donc en fin de séance,
+# dans une sortie que le hook redirige vers un journal que personne ne lit. Un fichier refusé
+# n'existe plus que sur un poste, et c'est la perte de continuité la plus sournoise du système.
+# Une seule implémentation pour les deux appelants : deux copies de cette logique vieilliraient
+# à deux âges, et c'est le plus silencieux des deux qui deviendrait muet sans le dire.
+claudeos_refused_by_lock() {
+    git -C "$ROOT" ls-files --others --ignored --exclude-standard -z 2>/dev/null \
+        | xargs -0 -r git -C "$ROOT" check-ignore -v -- 2>/dev/null \
+        | awk -F'\t' '$1 ~ /:\*$/ {print $2}'
+}
+
+# =============================================================================
 # Régime 'memory' — gestion dédiée (extraite de backup.sh / sync.sh). Les deux sens
 # font un travail de SÉCURITÉ différent (pas de duplication) : la sauvegarde garde
 # contre l'écrasement, la restauration snapshot + propage les suppressions. Requiert
@@ -50,7 +71,7 @@ claudeos_drift() {
 #   0 ok · 1 échec de copie · 2 anti-écrasement (message émis, abandon requis)
 #   3 dossier mémoire live absent (message émis, à ignorer/continuer)
 claudeos_mem_backup() {
-    local live="$1" repo="$2" repo_f base marker rc=0
+    local live="$1" repo="$2" repo_f base marker live_md rc=0
     [[ -d "$live" ]] || { echo "[backup] WARN : dossier mémoire auto introuvable ($live)" >&2; return 3; }
     if [[ -d "$repo" ]]; then
         local -a MISSING=()
@@ -67,12 +88,53 @@ claudeos_mem_backup() {
             return 2
         fi
     fi
-    rm -rf "$repo"; mkdir -p "$repo"
-    find "$live" -maxdepth 1 -name "*.md" -exec cp {} "$repo/" \; \
-        || { echo "[backup] ERREUR : échec copie mémoire auto ($live)" >&2; rc=1; }
+    # ÉCRITURE SANS FENÊTRE DE DESTRUCTION (2026-08-09). Avant : `rm -rf "$repo"` PUIS copie.
+    # Un échec de copie — disque plein, fichier illisible, process tué entre les deux — laissait
+    # le dépôt VIDÉ de sa mémoire jusqu'au prochain passage réussi, et le refus d'état partiel de
+    # `backup.sh` empêchait alors de committer, donc rien ne réparait tout seul. La mémoire auto
+    # est la seule chose de ce système qu'aucune autre copie ne porte : une fenêtre où elle
+    # n'existe nulle part est le pire état atteignable.
+    # Désormais : on remplit un répertoire temporaire à CÔTÉ de la cible, et on ne bascule
+    # qu'après une copie entièrement réussie. L'ancien contenu survit à tout échec, et la
+    # bascule est un couple de renommages dans le même système de fichiers — le dépôt est
+    # soit entièrement à l'ancien état, soit entièrement au nouveau, jamais à moitié.
+    # Le temporaire est nettoyé À L'ENTRÉE autant qu'à la sortie : un résidu de passage tué
+    # serait sinon remonté par le rapport des refus de la liste blanche à chaque sauvegarde.
+    local tmp="$repo.tmp" old="$repo.old"
+    rm -rf "$tmp" "$old"
+    mkdir -p "$tmp" || { echo "[backup] ERREUR : temporaire mémoire impossible ($tmp)" >&2; return 1; }
+    # BOUCLE EXPLICITE et non `find -exec` (2026-08-09). Le `|| rc=1` posé sur `find` ne
+    # pouvait PAS se déclencher : `find` ne répercute pas le code de retour de son `-exec`, il
+    # ne rend non nul que ses propres erreurs de parcours. Exercé sur pièce en rendant un
+    # fichier source illisible — `cp` criait, `find` rendait 0, la garde restait muette et la
+    # copie basculait AMPUTÉE de ce fichier. La garde d'écriture sans fenêtre écrite juste
+    # au-dessus n'aurait donc rien gardé : elle repose entièrement sur la détection de l'échec.
+    # `-print0` + `read -d ''` : les noms de fichiers de mémoire sont sages, mais un séparateur
+    # nul est le seul qui ne puisse pas se trouver dans un nom.
+    while IFS= read -r -d '' live_md; do
+        cp "$live_md" "$tmp/" \
+            || { echo "[backup] ERREUR : échec copie mémoire auto ('$live_md')" >&2; rc=1; }
+    done < <(find "$live" -maxdepth 1 -name "*.md" -print0)
     for marker in "${SYNC_MEM_MARKERS[@]}"; do
-        [[ -f "$live/$marker" ]] && { cp "$live/$marker" "$repo/$marker" || rc=1; }
+        [[ -f "$live/$marker" ]] && { cp "$live/$marker" "$tmp/$marker" || rc=1; }
     done
+    if [[ $rc -ne 0 ]]; then
+        rm -rf "$tmp"
+        echo "[backup] mémoire auto : le dépôt garde son état antérieur (aucune suppression faite)." >&2
+        return $rc
+    fi
+    # Bascule. Si le premier renommage échoue, rien n'a bougé ; si le second échoue, on remet
+    # l'ancien en place — dans les deux cas le dépôt sort de cette fonction dans un état complet.
+    if [[ -d "$repo" ]]; then
+        mv "$repo" "$old" || { rm -rf "$tmp"; echo "[backup] ERREUR : bascule mémoire impossible ($repo)" >&2; return 1; }
+    fi
+    if ! mv "$tmp" "$repo"; then
+        echo "[backup] ERREUR : bascule mémoire échouée — restauration de l'état antérieur." >&2
+        [[ -d "$old" ]] && mv "$old" "$repo"
+        rm -rf "$tmp"
+        return 1
+    fi
+    rm -rf "$old"
     return $rc
 }
 
@@ -91,7 +153,18 @@ claudeos_mem_restore() {
             cp "$live/$base" "$bk/$(basename "$live")/$base"
         fi
     done
-    cp "$repo/"*.md "$live/" 2>/dev/null || { echo "[sync] ERREUR : échec mémoire auto" >&2; rc=1; }
+    # LE `2>/dev/null` GLOBAL EST RETIRÉ (2026-08-09). Il était là pour absorber le seul cas
+    # bénin — un dépôt sans aucun `.md`, où le motif ne se développe pas et `cp` se plaint d'un
+    # fichier littéral inexistant. Mais il absorbait AUSSI tous les autres : droits, disque
+    # plein, fichier illisible. On voyait `rc=1` sans jamais savoir pourquoi, sur le sens de
+    # transfert qui écrit dans la mémoire VIVANTE. Le cas bénin est désormais traité par un
+    # test, ce qui rend au message d'erreur son unique métier : dire ce qui a réellement cassé.
+    local -a repo_mds=("$repo"/*.md)
+    if [[ -e "${repo_mds[0]}" ]]; then
+        cp "${repo_mds[@]}" "$live/" || { echo "[sync] ERREUR : échec mémoire auto (copie dépôt -> live)" >&2; rc=1; }
+    else
+        echo "[sync] WARN : aucun .md dans le dépôt ($repo) — rien à restaurer côté mémoire auto." >&2
+    fi
     for live_f in "$live"/*.md; do
         [[ -e "$live_f" ]] || continue
         base="$(basename "$live_f")"
@@ -101,8 +174,19 @@ claudeos_mem_restore() {
                 && echo "[sync] mémoire : '$base' absent du repo → retiré du live (filet : $bk)"
         fi
     done
+    # MARQUEURS SNAPSHOTÉS eux aussi (2026-08-09). Les `.md` l'étaient depuis l'origine, pas
+    # eux : le marqueur de distillation était écrasé en sec par la version du dépôt. Or il porte
+    # une SEMAINE — l'écraser par une valeur plus ancienne redéclare la distillation due, et par
+    # une plus récente la déclare faite alors qu'elle ne l'est pas sur ce poste. Dans les deux
+    # cas l'écrit local disparaissait sans filet, seul de son espèce dans cette fonction.
     for marker in "${SYNC_MEM_MARKERS[@]}"; do
-        [[ -f "$repo/$marker" ]] && cp "$repo/$marker" "$live/$marker"
+        [[ -f "$repo/$marker" ]] || continue
+        if [[ -f "$live/$marker" ]] && ! cmp -s "$repo/$marker" "$live/$marker"; then
+            mkdir -p "$bk/$(basename "$live")"
+            cp "$live/$marker" "$bk/$(basename "$live")/$marker" || rc=1
+        fi
+        cp "$repo/$marker" "$live/$marker" \
+            || { echo "[sync] ERREUR : échec copie du marqueur '$marker'" >&2; rc=1; }
     done
     return $rc
 }

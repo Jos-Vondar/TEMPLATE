@@ -14,13 +14,16 @@
 # =============================================================================
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$REPO/config.sh"          # claudeos_ws_roots (étape 3) — manifeste, jamais de chemin en dur
 done_n=0
 did() { echo "  ✚ $1"; done_n=$((done_n+1)); }
 
-# 1. Ligne d'amorçage de la bannière de démarrage dans ~/.bashrc (local, instantané).
+# 1. Ligne d'amorçage du wrapper de démarrage dans ~/.bashrc (local, instantané).
+# Le mot « bannière » est tombé le 2026-08-09 avec la bannière : ce que `~/.bashrc` doit
+# sourcer est le WRAPPER, qui injecte le prompt de bilan au lancement d'un terminal.
 if [ -f "$REPO/boot-wrapper.sh" ] && ! grep -qF 'boot-wrapper.sh' "$HOME/.bashrc" 2>/dev/null; then
     echo '[ -f "$HOME/.claudeos/engine/boot-wrapper.sh" ] && . "$HOME/.claudeos/engine/boot-wrapper.sh"' >> "$HOME/.bashrc" \
-        && did "bannière de démarrage ajoutée à ~/.bashrc (effet au prochain terminal)"
+        && did "wrapper de démarrage ajouté à ~/.bashrc (effet au prochain terminal)"
 fi
 
 # 2. Plugin superpowers (réseau ; ne tourne que s'il manque vraiment).
@@ -48,16 +51,21 @@ fi
 # sous-dossiers (niveau 3 et au-delà) n'en reçoivent pas — le confidentiel d'une app va dans
 # le réceptacle de son projet. D'où la profondeur figée à 2 : elle rend inutile la liste de
 # sous-dossiers à exclure qui vivait ici (docs, extracted, rapports…).
-if [ -d "$HOME/workstations" ]; then
-    _ign_n=0
+# Les racines balayées viennent du MANIFESTE depuis le 2026-08-09 (claudeos_ws_roots), plus
+# de `$HOME/workstations` en dur : une workstation déclarée ailleurs recevait sinon la
+# sauvegarde sans jamais recevoir ses réceptacles, et rien n'échouait.
+_ign_n=0
+while IFS= read -r _root; do
+    [ -d "$_root" ] || continue
     while IFS= read -r d; do
         [ -d "$d/_IGNORE" ] || { mkdir -p "$d/_IGNORE" && _ign_n=$((_ign_n+1)); }
-    done < <(find "$HOME/workstations" -mindepth 2 -maxdepth 2 -type d \
-        -not -name "_IGNORE" 2>/dev/null)
-    [ "$_ign_n" -gt 0 ] && did "$_ign_n réceptacle(s) _IGNORE/ créé(s) à la racine des projets"
-fi
+    done < <(find "$_root" -mindepth 1 -maxdepth 1 -type d -not -name "_IGNORE" 2>/dev/null)
+done < <(claudeos_ws_roots)
+[ "$_ign_n" -gt 0 ] && did "$_ign_n réceptacle(s) _IGNORE/ créé(s) à la racine des projets"
 
-# 4. (futures étapes idempotentes ici — ex. config git d'un repo annexe, etc.)
+
+
+# 6. (futures étapes idempotentes ici — ex. config git d'un repo annexe, etc.)
 
 [ "$done_n" -gt 0 ] && echo "[setup] $done_n action(s) de config appliquée(s)." || true
 exit 0

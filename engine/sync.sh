@@ -52,6 +52,7 @@ claudeos_drift DRIFT_MISSING DRIFT_DIFFERS
 # --- Application repo -> live, pilotée par le manifeste ---
 # Compteur d'échecs : « Synchronisé » ne s'affiche que si l'application est complète.
 SYNC_ERRS=0
+MIRROR_FORCED=0     # trace du levier anti-vidage, reportée au bilan (2026-08-09)
 while IFS=$'\t' read -r live repo regime; do
     [[ -d "$repo" ]] || continue
     case "$regime" in
@@ -78,11 +79,41 @@ while IFS=$'\t' read -r live repo regime; do
             # qui, sinon, sonneraient à chaque sync).
             # `|| true` : sous `set -euo pipefail`, un miroir SANS suppression fait sortir
             # `grep -v` en code 1 (aucun match) → la substitution avorterait tout le sync.
-            _del=$(rsync -ain --delete --exclude-from="$SYNC_IGNORE" "$repo/" "$live/" 2>/dev/null \
-                   | sed -n 's/^\*deleting  *//p' | grep -v '/$' | head -20) || true
-            if [[ -n "$_del" ]]; then
-                echo "[sync]   ↳ $(printf '%s\n' "$_del" | grep -c .) suppression(s) en miroir (filet : $BK_DIR) :"
+            _del_all=$(rsync -ain --delete --exclude-from="$SYNC_IGNORE" "$repo/" "$live/" 2>/dev/null \
+                   | sed -n 's/^\*deleting  *//p' | grep -v '/$') || true
+            _ndel=$(printf '%s\n' "$_del_all" | grep -c . || true)
+            _del=$(printf '%s\n' "$_del_all" | head -20)
+            if [[ -n "$_del_all" ]]; then
+                echo "[sync]   ↳ ${_ndel} suppression(s) en miroir (filet : $BK_DIR) :"
                 printf '%s\n' "$_del" | sed 's/^/      - /'
+                [[ "$_ndel" -gt 20 ]] && echo "      … et $((_ndel - 20)) autre(s)"
+            fi
+            # --- GARDE ANTI-VIDAGE DU MIROIR (2026-08-09) ------------------------------------
+            # Un miroir propage les suppressions par conception : c'est ce qui fait voyager un
+            # renommage. Mais la même mécanique vide un dossier vivant entier si le côté dépôt
+            # a perdu son contenu — capture ratée, mauvaise branche, arbre partiel. Le filet
+            # `--backup-dir` le sauve, oui, mais il est PURGÉ à 30 jours : passé ce délai, la
+            # perte est définitive et personne n'aura rien vu passer.
+            # Deux conditions ENSEMBLE, jamais une seule : plus de 20 % des fichiers du dossier
+            # vivant ET plus de dix fichiers. Le pourcentage seul crie sur un petit dossier où
+            # trois suppressions font la moitié ; le compte seul crie sur un gros dossier
+            # réorganisé légitimement. Une alarme qui crie sur du travail ordinaire apprend à
+            # ignorer la catégorie entière.
+            # BLOQUE ce miroir-ci et rien d'autre : les autres régimes s'appliquent, et le bilan
+            # sort INCOMPLET — c'est de la destruction, pas de l'encombrement.
+            _nlive=$(find "$live" -type f 2>/dev/null | wc -l | tr -d ' ')
+            if [[ "$_ndel" -gt 10 ]] && [[ "${_nlive:-0}" -gt 0 ]] \
+               && (( _ndel * 100 > _nlive * 20 )); then
+                if [[ "${FORCE_MIRROR_DELETE:-0}" == "1" ]]; then
+                    echo "[sync] 🔓 GARDE ANTI-VIDAGE LEVÉE (FORCE_MIRROR_DELETE=1) sur $(basename "$live") : ${_ndel} suppression(s) sur ${_nlive} fichier(s)." >&2
+                    MIRROR_FORCED=1
+                else
+                    echo "[sync] ⛔ REFUS : l'application en miroir de $(basename "$live") supprimerait ${_ndel} fichier(s) sur ${_nlive} en local (plus de 20 %)." >&2
+                    echo "[sync]    Cause probable : le côté dépôt a perdu son contenu (capture ratée, branche, arbre partiel) — vérifier le dépôt AVANT de forcer." >&2
+                    echo "[sync]    Si la suppression est voulue : FORCE_MIRROR_DELETE=1 bash $SELF/sync.sh" >&2
+                    SYNC_ERRS=$((SYNC_ERRS+1))
+                    continue
+                fi
             fi
             rsync "${RSYNC_BASE[@]}" --delete "$repo/" "$live/" \
                 || { echo "[sync] ERREUR : échec $live" >&2; SYNC_ERRS=$((SYNC_ERRS+1)); }
@@ -126,7 +157,10 @@ if [[ "$SYNC_ERRS" -gt 0 ]]; then
     echo "[sync] ⛔ INCOMPLET : $SYNC_ERRS étape(s) en échec — le live n'est PAS entièrement à jour. Voir les ERREUR ci-dessus." >&2
     exit 1
 fi
-printf '[sync] OK %s — dernière application dépôt→local. Pas la date de sauvegarde : voir git log.\n' "$(date '+%Y-%m-%d %H:%M')" > "$SELF/sync-last.log"
+# Le levier anti-vidage LEVÉ est reporté dans la trace : `sync.sh` n'a pas de journal de
+# verdict comme `backup.sh`, donc sans cette mention un vidage décidé ne laisserait aucune
+# trace persistante. `boot-check.sh` n'y lit que le mot INCOMPLET, l'ajout ne le perturbe pas.
+printf '[sync] OK %s%s — dernière application dépôt→local. Pas la date de sauvegarde : voir git log.\n' "$(date '+%Y-%m-%d %H:%M')" "$([[ "$MIRROR_FORCED" == 1 ]] && printf ' overrides=FORCE_MIRROR_DELETE')" > "$SELF/sync-last.log"
 echo "[sync] Synchronisé — $(git -C "$ROOT" log -1 --format='%h %s')"
 
 # --- Checklist de configuration AUTO (idempotente) ---

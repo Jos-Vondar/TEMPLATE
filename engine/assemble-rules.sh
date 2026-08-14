@@ -107,34 +107,45 @@ sed -i '/^> `$/d' "$TMP"
 
 mv "$TMP" "$REGLEMENT"
 
-# --- Retrait des fiches devenues sans objet ---------------------------------
-# Le fichier ET sa ligne de déclencheur partent ensemble. Une fiche présente mais non
-# routée ne se charge jamais ; une ligne de déclencheur sans fiche envoie vers le vide.
-# Ce sont les deux moitiés du même défaut, et la ligne a déjà été retirée ci-dessus.
-# TROISIÈME moitié, et elle manquait : l'INVENTAIRE DES FICHES du document de conception.
-# Le fichier partait, sa ligne de déclencheur partait, et sa ligne d'inventaire restait.
-# Or un contrôle de plomberie vérifie que chaque ligne de cet inventaire désigne un fichier
-# existant — donc toute personne répondant « non » à une condition héritait d'un
+# --- Retrait des compétences devenues sans objet -----------------------------
+# Le dossier de compétence ET sa ligne de déclencheur partent ensemble. Une compétence
+# présente mais absente de la carte de rappel a perdu son déclencheur visible ; une ligne
+# de déclencheur sans compétence envoie vers le vide. Ce sont les deux moitiés du même
+# défaut, et la ligne a déjà été retirée ci-dessus.
+# TROISIÈME moitié, et elle manquait : l'INVENTAIRE du document de conception.
+# La compétence partait, sa ligne de déclencheur partait, et sa ligne d'inventaire restait.
+# Or un contrôle de plomberie vérifie que chaque ligne de cet inventaire désigne une chose
+# existante — donc toute personne répondant « non » à une condition héritait d'un
 # avertissement permanent, dès son premier autotest, sur un système parfaitement conforme.
 # C'est le pire genre de faux positif : il apparaît à l'installation, il ne part jamais, et
 # il apprend à ignorer l'autotest. Un contrôle qu'on apprend à ignorer est un contrôle mort.
-_retire_fiche() {  # $1 = nom du fichier, $2 = nom de la condition
-    rm -f "$CIBLE/fiches/$1"
+_retire_competence() {  # $1 = nom de la compétence, $2 = nom de la condition
+    rm -rf "${CIBLE:?}/skills/$1"
+    # LES DEUX EXEMPLAIRES PARTENT ENSEMBLE. Le dossier de configuration est sauvegardé en
+    # régime additif : la sauvegarde ne propage jamais une suppression. Retirer le seul
+    # exemplaire vivant laissait le miroir du dépôt en place, et le contrôle de dérive
+    # (« fichier du repo absent en live ») bloquait la sauvegarde suivante — exercé sur
+    # pièce le 2026-08-14, en rejouant l'entretien après une première sauvegarde. Le
+    # miroir se retire donc ici, et la prochaine sauvegarde committe la disparition.
+    # Jamais en mode essai : l'essai ne touche que sa copie.
+    if [ "$CIBLE" = "$HOME/.claude" ]; then
+        rm -rf "$HOME/.claudeos/system/skills/$1"
+    fi
     sed -i "\#^| \`$1\` |#d" "$CIBLE/DESIGN.md" 2>/dev/null
     if grep -qF "\`$1\`" "$CIBLE/DESIGN.md" 2>/dev/null; then
         echo "[assemble] ⚠ $1 retirée, mais le document de conception la cite encore — à vérifier." >&2
     fi
-    FICHES_RETIREES="$FICHES_RETIREES $1"
+    COMPETENCES_RETIREES="$COMPETENCES_RETIREES $1"
 }
-FICHES_RETIREES=""
-est_vraie LIVRABLE || _retire_fiche "LIVRABLES.md" LIVRABLE
-est_vraie PROXY    || _retire_fiche "RTK_DEPANNAGE.md" PROXY
+COMPETENCES_RETIREES=""
+est_vraie LIVRABLE || _retire_competence "livrables" LIVRABLE
+est_vraie PROXY    || _retire_competence "rtk-depannage" PROXY
 
 # --- Compte rendu ------------------------------------------------------------
 echo "[assemble] Conditions vraies : ${VRAIES:-(aucune)}"
 echo "[assemble] Blocs conservés   : $GARDES"
 echo "[assemble] Blocs retirés     :${RETIRES:- aucun}"
-echo "[assemble] Fiches retirées   :${FICHES_RETIREES:- aucune}"
+echo "[assemble] Compétences retirées :${COMPETENCES_RETIREES:- aucune}"
 
 # Garde de dernier ressort : aucun marqueur ne doit survivre. Un marqueur resté en
 # place signale un bloc ni retiré ni ouvert, donc un assemblage à moitié fait.

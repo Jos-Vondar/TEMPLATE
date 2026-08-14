@@ -95,3 +95,24 @@ claudeos_pairs() {
     done < "$SYNC_MAP"
     printf '%s\t%s\t%s\n' "$MEM" "$ROOT/$MEM_REPO_SUBDIR" "memory"
 }
+
+# claudeos_ws_roots : émet un chemin VIVANT absolu par workstation, dérivé du manifeste —
+# les paires de régime `mirror` dont le sous-dossier du dépôt est sous `workstations/`.
+# Ajouté le 2026-08-09. Motif : `SYNC_SETUP.sh`, `build-portfolio.sh`, `build-threads.sh`,
+# `impact.sh` et une douzaine de contrôles de `selftest.sh` balayaient `$HOME/workstations`
+# en dur, alors que `SYNC_MAP` est déclaré source de vérité unique. C'est la reprise du bug
+# que `claudeos_pairs()` devait fermer : une workstation ajoutée au manifeste et rangée
+# ailleurs qu'exactement là serait sauvegardée sans être ni entretenue ni contrôlée, et rien
+# n'échouerait. Le régime décide autant que le chemin : une paire additive (`~/.claude`)
+# n'est pas une workstation, et une paire miroir hors de `workstations/` (`docs`,
+# `resources`) n'en est pas une non plus.
+# La PROFONDEUR reste figée chez les appelants : le niveau projet est à 1 sous la racine, le
+# niveau application à 2. C'est une convention de l'arborescence, pas une donnée du manifeste.
+claudeos_ws_roots() {
+    local live repo regime
+    while IFS=$'\t' read -r live repo regime; do
+        [[ "$regime" == "mirror" ]] || continue
+        [[ "$repo" == "$ROOT/workstations/"* ]] || continue
+        printf '%s\n' "$live"
+    done < <(claudeos_pairs)
+}

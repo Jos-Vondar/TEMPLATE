@@ -16,10 +16,14 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
 
 OUT="$MEM/PORTFOLIO.md"
 
-python3 - "$MEM" "$HOME/workstations" "$OUT" "$(date +%Y-%m-%d)" <<'PYEOF'
+python3 - "$MEM" "$(claudeos_ws_roots)" "$OUT" "$(date +%Y-%m-%d)" <<'PYEOF'
 import os, re, sys, glob, collections
 
-MEM, WS, OUT, TODAY = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+MEM, OUT, TODAY = sys.argv[1], sys.argv[3], sys.argv[4]
+# Racines des workstations dérivées du MANIFESTE depuis le 2026-08-09 (claudeos_ws_roots),
+# une par ligne, au lieu de `$HOME/workstations` en dur : une workstation déclarée ailleurs
+# était sauvegardée sans jamais entrer au portfolio, et rien ne l'aurait signalé.
+ROOTS = [r for r in sys.argv[2].splitlines() if r.strip()]
 H = os.path.expanduser('~')
 
 # ---------------------------------------------------------------- livrables --
@@ -38,7 +42,7 @@ def kind(path, name):
     if '/plans/' in p: return "plan d'implémentation"
     if '/rapports/' in p or REPORT.search(name): return 'rapport périodique'
     if name == 'DESIGN.md': return "conception d'app"
-    if name in ('DESIGN.md', 'DESIGN.md'): return 'référence de conception'
+    if name in ('DESIGN.md'): return 'référence de conception'
     n = name.lower()
     if 'feasibility' in n or 'faisabilite' in n: return 'note de faisabilité'
     if n.startswith('rfc'): return 'RFC'
@@ -60,16 +64,16 @@ def title_of(path, name):
             pass
     return name
 
-def scope(path):
-    """(domaine, projet) déduits de l'arborescence."""
-    rel = os.path.relpath(path, WS).split(os.sep)
-    dom = rel[0] if rel else '?'
-    proj = rel[1] if len(rel) > 2 else ''
-    if proj.endswith('.md'): proj = ''
+def scope(path, root):
+    """(domaine, projet) déduits de l'arborescence. Le domaine EST le nom de la racine."""
+    rel = os.path.relpath(path, root).split(os.sep)
+    dom = os.path.basename(root)
+    proj = rel[0] if len(rel) > 1 else ''
     return dom, proj
 
 items = []
-for path in glob.glob(f'{WS}/**/*', recursive=True):
+for root in ROOTS:
+  for path in glob.glob(f'{root}/**/*', recursive=True):
     if not os.path.isfile(path): continue
     if '/_IGNORE/' in path or '/extracted/' in path or '/scaffold/' in path: continue
     if '/__pycache__/' in path or '/source/' in path: continue
@@ -81,9 +85,10 @@ for path in glob.glob(f'{WS}/**/*', recursive=True):
         date = ''                       # daté par son en-tête de version, pas par son nom
     else:
         continue
-    dom, proj = scope(path)
+    dom, proj = scope(path, root)
     items.append({'date': date, 'dom': dom, 'proj': proj, 'kind': kind(path, name),
-                  'title': title_of(path, name), 'path': os.path.relpath(path, H)})
+                  'title': title_of(path, name), 'path': os.path.relpath(path, H),
+                  'scope': f'{dom}/{proj}' if proj else dom})
 
 # Les conceptions d'app n'ont pas de date de nom : on prend la version de leur en-tête.
 VER = re.compile(r'V?(\d+\.\d+(?:\.\d+)?)')
@@ -102,10 +107,10 @@ undated = sorted([i for i in items if not i['date']], key=lambda i: (i['dom'], i
 # ------------------------------------------------------------- fil du temps --
 # Projets = dossiers réels de niveau 2, plus les sujets qui vivent ailleurs qu'en dossier.
 projects = {}
-for d in sorted(glob.glob(f'{WS}/*/*')):
-    if os.path.isdir(d) and not os.path.basename(d).startswith('_'):
-        rel = os.path.relpath(d, WS)
-        projects[rel] = [os.path.basename(d)]
+for root in ROOTS:
+    for d in sorted(glob.glob(f'{root}/*')):
+        if os.path.isdir(d) and not os.path.basename(d).startswith('_'):
+            projects[f'{os.path.basename(root)}/{os.path.basename(d)}'] = [os.path.basename(d)]
 ALIAS = {}
 for k, v in ALIAS.items():
     projects.setdefault(k, []).extend(v)
@@ -161,7 +166,11 @@ for proj, keys in sorted(projects.items()):
     # à part les sessions qui ne font que mentionner — l'information reste, sans noyer la vue.
     mine = [(d, lab) for d, lab, body in sessions if pat.search(lab)]
     aside = len([1 for d, lab, body in sessions if not pat.search(lab) and pat.search(body)])
-    livr = [i for i in dated if os.path.join('workstations', proj) in i['path']]
+    # Appariement sur le PÉRIMÈTRE calculé (domaine/projet), et non sur un `workstations/`
+    # cherché dans le chemin : depuis le 2026-08-09 la racine vient du manifeste et n'a plus
+    # à s'appeler ainsi. Le périmètre s'arrête au niveau projet, donc un livrable niché sous
+    # une application porte le périmètre de son projet et l'égalité suffit.
+    livr = [i for i in dated if i['scope'] == proj]
     if not mine and not livr and not aside: continue
     L.append(f'### {proj}')
     L.append('')

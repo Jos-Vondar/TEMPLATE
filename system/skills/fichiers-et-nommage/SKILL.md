@@ -1,3 +1,8 @@
+---
+name: fichiers-et-nommage
+description: Créer, nommer, déplacer ou supprimer un fichier ou un dossier. Porte les conventions de nommage, les réceptacles `_IGNORE/`, la suppression en zone hors sauvegarde.
+---
+
 # Règles — créer, nommer, déplacer, supprimer un fichier ou un dossier
 
 > Fiche situationnelle. Déclencheur : je crée, nomme, déplace ou supprime un fichier ou un dossier.

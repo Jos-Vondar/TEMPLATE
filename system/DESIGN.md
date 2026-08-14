@@ -143,7 +143,7 @@ Corollaire : **un fait calculable ne s'écrit pas, il se lit.** Un compte, une t
 
 C'est la partie qui distingue ce système d'un simple fichier de consignes, et **c'est elle qui compte à long terme** : les règles que tu as reçues viennent des incidents de quelqu'un d'autre, celles qui te serviront viendront des tiens.
 
-Le cycle : un retour de l'utilisateur est **consigné**, pas appliqué à la volée. Les candidats s'accumulent dans un registre. Une **distillation** périodique décide lesquels deviennent des règles, lesquels partent en fiche sur déclencheur, et lesquels sont abandonnés. Le motif de chaque promotion est écrit dans un registre des origines — sans lui, une règle devient intouchable parce que plus personne ne sait pourquoi elle existe.
+Le cycle : un retour de l'utilisateur est **consigné**, pas appliqué à la volée. Les candidats s'accumulent dans un registre. Une **distillation** périodique décide lesquels deviennent des règles, lesquels partent en compétence sur déclencheur, et lesquels sont abandonnés. Le motif de chaque promotion est écrit dans un registre des origines — sans lui, une règle devient intouchable parce que plus personne ne sait pourquoi elle existe.
 
 Un **audit** périodique relit l'ensemble : ce qui est affirmé est-il encore vrai, ce qui est routé existe-t-il, ce qui s'accumule sert-il encore. Il ne teste pas la plomberie, que l'autotest couvre déjà.
 
@@ -154,22 +154,23 @@ Registres livrés vides : candidats, origines, ratés de recherche, idées mises
 Trois niveaux, et la distinction entre eux est ce qui empêche le système de regrossir :
 
 - **Le règlement** (`CLAUDE.md`) — chargé à **chaque** session, donc payé à chaque session. Une règle n'y entre que si son omission ferait commettre une erreur dans une session qui ne charge rien d'autre, **ou** si c'est une chose qui ne peut pas se convoquer elle-même — l'identité, la voix, la conduite par défaut, pour lesquelles aucun déclencheur ne dira jamais « sois toi ».
-- **Les fiches** — chargées sur **déclencheur** seulement. Tout le reste va là. Une fiche sans déclencheur déclaré dans le règlement est une fiche qui ne se charge jamais : c'est un défaut qui bloque, parce qu'il ne se manifeste par rien.
+- **Les règles situationnelles** — des compétences de `~/.claude/skills/`, chargées sur **déclencheur** seulement : la `description` de chacune est son déclencheur. Tout le reste va là. Une compétence dont la description ne couvre pas le moment du danger ne se charge jamais : c'est un défaut qui bloque, parce qu'il ne se manifeste par rien.
 - **Le catalogue** (`RULES_CATALOG.md`) — pour chaque règle, son énoncé, son motif et sa condition d'existence. C'est la notice de ton propre système : une règle dont la condition ne tient plus est une règle à retirer.
 
-### Inventaire des fiches
+### Inventaire des règles situationnelles
 
-Une fiche présente ici mais absente de la table des déclencheurs ne se charge jamais. Les deux listes se tiennent à jour ensemble.
+Une compétence présente ici mais absente de la table de rappel du règlement (§3.3) est une compétence dont personne ne connaît le déclencheur. Les deux listes se tiennent à jour ensemble.
 
-| Fiche | Ce qu'elle porte |
+| Compétence | Ce qu'elle porte |
 | :--- | :--- |
-| `MEMOIRE_ET_VERITE.md` | Écrire un fait, un statut, une décision ; toucher une source de vérité. |
-| `FICHIERS_ET_NOMMAGE.md` | Créer, nommer, déplacer, supprimer un fichier ou un dossier. |
-| `SECRETS_DETAIL.md` | Régimes de stockage d'un secret, et conduite devant un refus de sauvegarde. |
-| `SESSION.md` | Reprise de contexte, distillation, clôture de séance. |
-| `CONTROLES_ET_ALARMES.md` | Écrire, modifier ou désarmer un contrôle mécanique. |
-| `LIVRABLES.md` | Produire un document destiné à un tiers, y avancer un fait sourcé. |
-| `RTK_DEPANNAGE.md` | Panne ou mesure du proxy économe en jetons. |
+| `memoire-et-verite` | Écrire un fait, un statut, une décision ; toucher une source de vérité. |
+| `fichiers-et-nommage` | Créer, nommer, déplacer, supprimer un fichier ou un dossier. |
+| `secrets-detail` | Régimes de stockage d'un secret, et conduite devant un refus de sauvegarde. |
+| `session` | Reprise de contexte, distillation, passe hebdomadaire, proposition du jour. |
+| `reprise` | Écrire l'état de reprise d'un niveau ; les trois gestes de la clôture. |
+| `controles-et-alarmes` | Écrire, modifier ou désarmer un contrôle mécanique. |
+| `livrables` | Produire un document destiné à un tiers, y avancer un fait sourcé. |
+| `rtk-depannage` | Panne ou mesure du proxy économe en jetons. |
 
 Il n'y a **pas de plafond chiffré** au règlement. C'est le critère d'admission qui décide. Le poids est mesuré et affiché ; il avertit, il ne bloque pas.
 
