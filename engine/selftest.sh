@@ -11,8 +11,13 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
 FAIL=0
 ok() { echo "  ✅ $1"; }
 ko() { echo "  ❌ $1" >&2; FAIL=1; }
-# warn : signale sans faire échouer. Pour ce qui doit être vu mais ne doit PAS bloquer la
-# sauvegarde (un manque de contenu ne doit jamais empêcher d'enregistrer le travail).
+# warn : signale sans faire échouer. Critère d'arbitrage, généralisé le 2026-08-14 : `ko`
+# est réservé à ce dont le passage cause une PERTE IRRÉVERSIBLE, une FUITE, ou le
+# DÉSARMEMENT SILENCIEUX d'une garde ; tout le reste avertit — un défaut de contenu ou de
+# carte ne doit jamais empêcher d'enregistrer le travail. Ce reclassement n'a été possible
+# que parce que les ⚠ sont désormais VUS : la sauvegarde les enregistre et les relaie, le
+# démarrage aussi (synclib.sh, claudeos_selftest_warns_record) — avant ça, backup.sh jetait
+# toute cette sortie, et passer un contrôle en avertissement revenait à l'éteindre.
 warn() { echo "  ⚠️  $1" >&2; }
 
 # Racines des workstations — dérivées du MANIFESTE (claudeos_ws_roots), plus jamais écrites en
@@ -38,7 +43,7 @@ for _r0 in ${_WS_MANQUANTES[@]+"${_WS_MANQUANTES[@]}"}; do
     ko "domaine déclaré au manifeste ($SYNC_MAP) mais introuvable sur le disque : $_r0"
 done
 if [ "${#_WS[@]}" -eq 0 ] && [ "${#_WS_MANQUANTES[@]}" -eq 0 ]; then
-    echo "  ⏭  aucun domaine déclaré au manifeste : sans objet pour les contrôles 28, 29, 32, 33, 37 et la part workstation de 22 et 27. Pour en déclarer un : une ligne « workstations/<DOMAINE>  workstations/<DOMAINE>  mirror » dans $SYNC_MAP."
+    echo "  ⏭  aucun domaine déclaré au manifeste : sans objet pour les contrôles 28, 29, 32, 33 et la part workstation de 22 et 27. Pour en déclarer un : une ligne « workstations/<DOMAINE>  workstations/<DOMAINE>  mirror » dans $SYNC_MAP."
 fi
 
 echo "[selftest] 1. Syntaxe des scripts"
@@ -229,7 +234,10 @@ echo "[selftest] 15. Mémoire : propagation des suppressions avec filet — câb
 _m16=0
 grep -q 'absent du repo → retiré du live' "$SELF/synclib.sh" || _m16=1
 grep -q 'claudeos_mem_restore' "$SELF/sync.sh" || _m16=1
-[ "$_m16" = 0 ] && ok "propagation des suppressions câblée (synclib + sync.sh)" || ko "propagation suppression mémoire (#16)"
+# AVERTIT depuis le 2026-08-14 (arbitrage global bloquant/avertissement) : le défaut gardé
+# est qu'une note supprimée REVIENNE, jamais qu'elle soit détruite — ni perte irréversible,
+# ni fuite, ni désarmement d'une garde de sauvegarde.
+[ "$_m16" = 0 ] && ok "propagation des suppressions câblée (synclib + sync.sh)" || warn "propagation suppression mémoire (#16) — câblage à revérifier"
 
 echo "[selftest] 16. Visibilité des suppressions miroir — câblage (#9)"
 # MOITIÉ RETIRÉE le 2026-08-05 : elle vérifiait qu'un essai à blanc de `rsync` liste un fichier
@@ -238,7 +246,9 @@ echo "[selftest] 16. Visibilité des suppressions miroir — câblage (#9)"
 # CE QUI RESTE : `sync.sh` annonce-t-il les suppressions en miroir. Un oubli là se voit.
 _n9=0
 grep -q 'suppression(s) en miroir' "$SELF/sync.sh" || _n9=1
-[ "$_n9" = 0 ] && ok "annonce des suppressions en miroir câblée dans sync.sh" || ko "visibilité suppressions miroir (#9)"
+# AVERTIT depuis le 2026-08-14 : la suppression en miroir est VOULUE par le dépôt, qui en
+# garde l'historique — un défaut d'annonce encombre, il ne détruit rien.
+[ "$_n9" = 0 ] && ok "annonce des suppressions en miroir câblée dans sync.sh" || warn "visibilité suppressions miroir (#9) — câblage à revérifier"
 
 echo "[selftest] 17. Alarme binaires (#6)"
 # MOITIÉ RETIRÉE le 2026-08-07 : elle montait un dépôt jetable pour vérifier que `git numstat`
@@ -258,7 +268,10 @@ _s2=0
 for v in FORCE_FRESH FORCE_SELFTEST FORCE_SECRET FORCE_BINARY; do grep -q "$v" "$SELF/backup.sh" || _s2=1; done
 grep -q 'system/secrets-shared' "$SELF/backup.sh" || _s2=1
 grep -q 'SECURITY_DEBT' "$SELF/boot-check.sh" || _s2=1
-[ -d "$HOME/.claude/secrets-shared" ] || _s2=1
+# Terme DÉGROUPÉ le 2026-08-14 : la présence du dossier n'est pas un câblage d'alarme, et
+# groupée elle produisait le même refus qu'une alarme secret décâblée. Elle avertit seule ;
+# les autres termes du contrôle — le câblage anti-fuite réel — restent bloquants.
+[ -d "$HOME/.claude/secrets-shared" ] || warn "dossier ~/.claude/secrets-shared/ absent — à créer (mkdir) ; les alarmes secret, elles, restent câblées et bloquantes"
 # Régression : un secret dans secrets-shared/ DOIT être synchronisé (ne pas être ré-exclu
 # par un motif SYNC_IGNORE sans slash, cf. le trou service_api_key.txt attrapé le 02/07).
 _ss=$(mktemp -d); _sd=$(mktemp -d); mkdir -p "$_ss/secrets-shared"; echo k > "$_ss/secrets-shared/service_api_key.txt"
@@ -278,7 +291,7 @@ _dre='\.(csv|tsv|txt|json|xml|eml|msg)$'
 printf 'table_export.csv\n' | grep -qEi "$_dre" || _s2=1              # donnée texte → doit matcher
 printf 'compte_rendu.TXT\n'  | grep -qEi "$_dre" || _s2=1              # casse majuscule → doit matcher
 if printf 'design.md\n' | grep -qEi "$_dre"; then _s2=1; fi            # .md (base de connaissance) → ne doit pas matcher
-[ "$_s2" = 0 ] && ok "FORCE dégroupé + whitelist + scan boot + dossier + secrets-shared + alarme nom (#8) + alarme donnée (#9)" || ko "câblage politique secrets"
+[ "$_s2" = 0 ] && ok "FORCE dégroupé + whitelist + scan boot + secrets-shared + alarme nom (#8) + alarme donnée (#9)" || ko "câblage politique secrets"
 
 echo "[selftest] 19. Wave 4 backup/sync — câblage (#15 purge filet, #7 marqueur hors-ligne, #10 msg rebase)"
 # MOITIÉ RETIRÉE le 2026-08-05 : elle datait un dossier de quarante jours pour vérifier que
@@ -479,6 +492,9 @@ echo "[selftest] 22. Portabilité — aucun chemin propre à un poste dans les f
 if ! condition_vraie MULTIPOSTE; then
     echo "  ⏭  sauté : la condition MULTIPOSTE est fausse dans $_CONDITIONS"
 else
+# AVERTIT depuis le 2026-08-14 : un chemin propre à un poste est un défaut DOCUMENTAIRE —
+# le contrôle 27 attrape ce qui pointe dans le vide. Bloquer ici faisait payer une erreur
+# de carte par une interdiction de sauvegarder.
 _p=0
 _slug="$(echo "$HOME" | sed 's#/#-#g')"
 # Le nom du dossier de mémoire auto dérive du dossier personnel : il diffère d'un poste
@@ -488,11 +504,11 @@ _slug="$(echo "$HOME" | sed 's#/#-#g')"
 _h=$( { grep -rl -- "$_slug" "$_CMD" "$HOME/.claude/skills" 2>/dev/null; \
         [ "${#_WS[@]}" -gt 0 ] && find "${_WS[@]}" \( -name CLAUDE.md -o -name DESIGN.md \) -print0 2>/dev/null \
           | xargs -0 grep -l -- "$_slug" 2>/dev/null; } | sort -u)
-[ -n "$_h" ] && { ko "slug de poste ('$_slug') en dur : $(echo "$_h" | tr '\n' ' ')"; _p=1; }
+[ -n "$_h" ] && { warn "slug de poste ('$_slug') en dur : $(echo "$_h" | tr '\n' ' ')"; _p=1; }
 # Un slug FAUX passerait le test ci-dessus (il ne cherche que le bon). Motif générique :
 # tout '-home-…' / '-Users-…' dans une instruction est un nom de dossier de mémoire figé.
 _h3=$(grep -rlE -- 'projects/-(home|Users|c|mnt)[A-Za-z0-9_-]*/' "$_CMD" "$HOME/.claude/skills" 2>/dev/null | sort -u)
-[ -n "$_h3" ] && { ko "nom de dossier de mémoire figé (résoudre le slug, ne pas l'écrire) : $(echo "$_h3" | tr '\n' ' ')"; _p=1; }
+[ -n "$_h3" ] && { warn "nom de dossier de mémoire figé (résoudre le slug, ne pas l'écrire) : $(echo "$_h3" | tr '\n' ' ')"; _p=1; }
 # Chemins absolus dans les fichiers du système lui-même (périmètre où l'on est prescriptif).
 # PÉRIMÈTRE INCHANGÉ AU 2026-08-09, volontairement : la conversion des fiches en compétences
 # remplace `~/.claude/fiches` par les seules compétences SITUATIONNELLES ($_SITU), pas par
@@ -500,7 +516,7 @@ _h3=$(grep -rlE -- 'projects/-(home|Users|c|mnt)[A-Za-z0-9_-]*/' "$_CMD" "$HOME/
 # qui documentent un chemin de conteneur, donc un blocage neuf sur du
 # préexistant sous couvert de recâblage. Cet élargissement est une décision à part.
 _h2=$(printf '%s\n' "$_SITU" | xargs grep -lE -- '/home/[a-z_][a-z0-9_-]*/|/Users/[A-Za-z]' "$_CMD" "$HOME/.claude/DESIGN.md" 2>/dev/null | sort -u)
-[ -n "$_h2" ] && { ko "chemin absolu en dur dans le règlement ou une règle situationnelle : $(echo "$_h2" | tr '\n' ' ')"; _p=1; }
+[ -n "$_h2" ] && { warn "chemin absolu en dur dans le règlement ou une règle situationnelle : $(echo "$_h2" | tr '\n' ' ')"; _p=1; }
 [ "$_p" = 0 ] && ok "règlement, règles situationnelles et instructions de workstation sans chemin propre à un poste"
 fi
 
@@ -695,7 +711,9 @@ echo "[selftest] 26. Amorçage — le gabarit crée-t-il dans l'arbre sauvegard�
 _tpl="$HOME/resources/WORKSTATION_TEMPLATE.md"
 if [ ! -f "$_tpl" ]; then ok "⏭ sauté : gabarit absent — son existence est gardée par le contrôle 27"
 elif grep -qE '`~/<Nom' "$_tpl"; then
-    ko "le gabarit crée hors de ~/workstations/ — la workstation naîtrait hors du filet, sans que rien n'échoue"
+    # AVERTIT depuis le 2026-08-14 : ce qui met un domaine dans le filet est sa ligne au
+    # manifeste, pas son emplacement — un gabarit déviant se corrige, il ne perd rien.
+    warn "le gabarit crée hors de ~/workstations/ — la workstation naîtrait hors du filet, sans que rien n'échoue"
 else ok "toutes les destinations du gabarit sont sous ~/workstations/"; fi
 
 echo "[selftest] 27. Chemins morts dans les fichiers d'instruction"
@@ -729,7 +747,10 @@ print('\n'.join(sorted(set(out))))
 PYEOF
 )
 if [ -n "$_dead" ]; then
-    ko "chemin cité par une règle mais absent du disque :"; echo "$_dead" | sed 's/^/       /' >&2
+    # AVERTIT depuis le 2026-08-14 : un pointeur mort envoie la session dans le vide, il ne
+    # désactive ni ne détruit rien — même classe que le contrôle 45. C'est ce contrôle qui a
+    # refusé une première sauvegarde le jour de l'arbitrage.
+    warn "chemin cité par une règle mais absent du disque :"; echo "$_dead" | sed 's/^/       /' >&2
 else ok "tous les chemins cités par les règles et les procédures existent"; fi
 
 echo "[selftest] 28. Réceptacle des documents client à la racine de chaque projet"
@@ -749,7 +770,9 @@ _noign=$(find "${_WS[@]}" -mindepth 1 -maxdepth 1 -type d \
     -not -name "_IGNORE" \
     2>/dev/null | while read -r d; do [ -d "$d/_IGNORE" ] || echo "${d#$HOME/}"; done)
 if [ -n "$_noign" ]; then
-    ko "projet sans réceptacle \`_IGNORE/\` à sa racine (le premier document client y atterrirait en zone sauvegardée) :"
+    # AVERTIT depuis le 2026-08-14 : la fuite elle-même est gardée par le contrôle 10 et par
+    # les alarmes de backup.sh — ici c'est un réceptacle manquant, défaut de rangement.
+    warn "projet sans réceptacle \`_IGNORE/\` à sa racine (le premier document client y atterrirait en zone sauvegardée) :"
     echo "$_noign" | sed 's/^/       /' >&2
 else ok "tous les projets ont leur réceptacle à leur racine"; fi
 fi
@@ -843,10 +866,13 @@ echo "[selftest] 30. Rappel échu : le démarrage le sort-il vraiment ?"
 # seul actif. La vérification d'origine (2026-07-03) ne testait que le cas NÉGATIF — un
 # rappel à échéance future n'est pas affiché — jamais le cas positif. Ce contrôle teste le
 # cas positif, seul capable d'attraper la classe entière (cf. le document de conception).
+# AVERTIT depuis le 2026-08-14, arbitré par l'utilisateur : la dette de sécurité a son
+# propre bloc, et le contrôle 4 garde le bilan de démarrage lui-même — un rappel muet
+# encombre, il ne désarme pas une garde de sauvegarde.
 _r=0
 # (a) Anti-régression : la garde de dernière ligne est-elle toujours dans la boucle ?
 grep -qF 'read -r rline || [ -n "$rline" ]' "$SELF/boot-check.sh" \
-    || { ko "garde de dernière ligne absente de la boucle des rappels (boot-check.sh) — un fichier sans retour à la ligne final reperdrait son rappel le plus récent"; _r=1; }
+    || { warn "garde de dernière ligne absente de la boucle des rappels (boot-check.sh) — un fichier sans retour à la ligne final reperdrait son rappel le plus récent"; _r=1; }
 # (b) Cas positif, sur données réelles : tout rappel dont l'échéance est atteinte doit
 #     apparaître dans le bilan injecté. Sans rappel échu au moment du contrôle, (b) est
 #     inapplicable — on le dit, on ne le maquille pas en succès.
@@ -866,7 +892,7 @@ import json, sys
 t = json.load(sys.stdin)["hookSpecificOutput"]["additionalContext"]
 print(t.count("⏰"))
 ' 2>/dev/null || echo 0)
-    [ "${_seen:-0}" -eq 0 ] && { ko "$_due rappel(s) échu(s) dans REMINDERS.md mais AUCUN dans le bilan de démarrage — le bloc est muet"; _r=1; }
+    [ "${_seen:-0}" -eq 0 ] && { warn "$_due rappel(s) échu(s) dans REMINDERS.md mais AUCUN dans le bilan de démarrage — le bloc est muet"; _r=1; }
     [ "$_r" = 0 ] && ok "garde de dernière ligne en place + $_due rappel(s) échu(s) effectivement sorti(s) au démarrage"
 else
     [ "$_r" = 0 ] && ok "garde de dernière ligne en place (aucun rappel échu à ce jour — cas positif non exercé)"
@@ -997,9 +1023,11 @@ echo "[selftest] 35. Retombée documentaire — refuse-t-elle un argument inexpl
 # avalée par une redirection. Quatre jours de réécriture n'avaient donc été confrontés à
 # aucun document. Ce contrôle exerce les deux cas positifs : l'argument absurde doit crier,
 # et la date doit fonctionner. Le cas négatif seul ne distinguerait pas un outil muet.
+# AVERTIT depuis le 2026-08-14 : impact.sh est un outil de compte rendu — muet, il fait
+# rater une relecture, pas un fichier.
 _i=0
 bash "$SELF/impact.sh" --since "zzz-pas-une-date" >/dev/null 2>&1 \
-    && { ko "un argument inexploitable est accepté — la sortie vide serait lue comme « rien à signaler »"; _i=1; }
+    && { warn "un argument inexploitable est accepté — la sortie vide serait lue comme « rien à signaler »"; _i=1; }
 # La date d'essai se dérive de l'HISTOIRE RÉELLE du dépôt, et non d'une fenêtre fixe.
 # Motif (2026-08-06, trouvé en installant le système à neuf) : sur un dépôt créé aujourd'hui,
 # aucun commit ne peut précéder une date d'il y a sept jours. L'outil refusait donc à juste
@@ -1015,13 +1043,13 @@ else
     # le contrôle reste exercé, sur une fenêtre plus étroite, et on le dit.
     [ "$_prem" \> "$_cible" ] && { _cible="$_prem"; warn "retombée documentaire exercée sur une fenêtre réduite (dépôt né le $_prem)"; }
     if ! bash "$SELF/impact.sh" --since "$_cible" >/dev/null 2>&1; then
-        ko "une date est refusée — la passe hebdomadaire ne peut plus appeler la retombée documentaire"; _i=1
+        warn "une date est refusée — la passe hebdomadaire ne peut plus appeler la retombée documentaire"; _i=1
     fi
 fi
 # La garde qui rendait le défaut muet ne doit pas revenir : le diff par référence
 # ne s'exécute plus derrière une redirection d'erreur.
 grep -q 'diff --name-only "$SINCE" 2>/dev/null' "$SELF/impact.sh" 2>/dev/null \
-    && { ko "la redirection d'erreur est revenue sur le diff par référence — l'échec redeviendrait silencieux"; _i=1; }
+    && { warn "la redirection d'erreur est revenue sur le diff par référence — l'échec redeviendrait silencieux"; _i=1; }
 [ "$_i" -eq 0 ] && ok "argument absurde refusé (code 2), date acceptée et résolue, redirection d'erreur absente"
 
 echo "[selftest] 36. Secret hors de son emplacement autorisé, y compris en zone non sauvegardée (avertissement)"
@@ -1116,129 +1144,6 @@ if [ -n "$_sec_hits" ]; then
     _r=1
 fi
 [ "$_r" = 0 ] && ok "aucune valeur de secret hors de secrets-shared/ et des _IGNORE/ (arbre entier, zones non sauvegardées comprises)"
-
-echo "[selftest] 37. Cascade d'instructions — un terme proscrit par un niveau n'est prescrit par aucun niveau sous lui"
-# Classe de défaut que rien ne gardait, constatée le 2026-08-03 : deux niveaux de la cascade se
-# contredisaient sur le nom d'une propriété d'écran de chargement (`AutoStart`, le niveau app
-# disant `Start` qui n'existe pas), et c'est le niveau LOCAL qui prime — donc le faux gagnait.
-# Aucun mécanisme ne regardait la cohérence d'une valeur entre deux niveaux.
-#
-# Ce que le contrôle exploite : quand un niveau tranche un nom, il l'écrit sous une forme
-# négative explicite — « jamais `Start` », « aucune propriété `Start` n'existe ». Cette forme
-# est la déclaration de l'interdit, donc elle est lisible par une machine. Le contrôle extrait
-# les termes ainsi proscrits, puis vérifie qu'aucun document situé SOUS le niveau qui les
-# proscrit ne les prescrit dans du code encadré.
-#
-# Limite à énoncer, elle est réelle : il ne voit que les interdits écrits sous cette forme.
-# Un désaccord entre deux niveaux qu'aucun des deux n'a tranché lui échappe. Il réduit la
-# surface, il ne certifie pas la cascade — même réserve que la retombée documentaire (#35).
-#
-# AVERTIT : une contradiction de cascade fait répondre faux, elle ne désactive ni ne détruit
-# rien, et elle se corrige dès qu'on la voit.
-_r=0
-_casc=$(python3 - "${_WS[@]}" <<'PY' 2>/dev/null
-import os, re, sys
-
-roots = sys.argv[1:]     # racines dérivées du manifeste (2026-08-09), plus un chemin en dur
-# Les chemins rapportés sont relatifs au dossier personnel et non à « la » racine : il y en a
-# désormais plusieurs, et une variable de boucle qui fuit aurait daté le message de la dernière.
-H = os.path.expanduser("~")
-# Documents prescriptifs de la cascade, du plus général au plus local.
-NAMES = ("CLAUDE.md", "DESIGN.md")
-# « jamais `X` » / « aucune propriété `X` n'existe » / « `X` n'existe pas » / « pas `X` »
-BAN = [
-    re.compile(r"jamais\s+`([A-Za-z_][A-Za-z0-9_]*)`"),
-    re.compile(r"aucune\s+propri[eé]t[eé]\s+`([A-Za-z_][A-Za-z0-9_]*)`\s+n'existe"),
-    re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`\s*,?\s*(?:propri[eé]t[eé]\s+)?qui\s+n'existe\s+pas"),
-]
-
-docs = {}
-for root in roots:
-  for dirpath, dirnames, filenames in os.walk(root):
-    dirnames[:] = [d for d in dirnames if d not in ("_IGNORE", "extracted", ".git")]
-    for fn in filenames:
-        if fn in NAMES:
-            p = os.path.join(dirpath, fn)
-            try:
-                docs[p] = open(p, encoding="utf-8").read()
-            except OSError:
-                pass
-
-# Un terme proscrit par le document D vaut pour tout document situé dans un sous-dossier de D.
-bans = {}          # terme -> (dossier du document qui le proscrit, chemin de ce document)
-for p, txt in docs.items():
-    for rx in BAN:
-        for m in rx.finditer(txt):
-            bans.setdefault(m.group(1), (os.path.dirname(p), p))
-
-# Homonymes — correctif du 2026-08-07, faux positif diagnostiqué et corrigé le jour même.
-# `Value` était proscrit comme propriété de sortie d'un contrôle (dont la sortie s'appelle
-# `Text`) et prescrit comme nom de colonne d'un patron référentiel. Deux objets, un seul mot.
-# Le contrôle appariait les deux et criait sur de la documentation exacte — et une alarme
-# rouge en permanence apprend à ignorer la catégorie entière.
-# Discriminant : si le document QUI PROSCRIT prescrit lui-même le terme ailleurs, dans une
-# ligne non négative, alors le terme porte deux sens dans ce vocabulaire et l'interdit n'est
-# pas global. On l'écarte, en le disant. Le cas légitime n'est pas touché : le document qui
-# proscrivait `Start` ne le prescrit nulle part.
-def prescrit_dans(txt, term):
-    rx = re.compile(r"`[^`]*\b" + re.escape(term) + r"\b\s*[:=][^`]*`")
-    for m in rx.finditer(txt):
-        ls = txt.rfind("\n", 0, m.start()) + 1
-        le = txt.find("\n", m.end())
-        line = txt[ls:le if le != -1 else len(txt)]
-        if not re.search(r"jamais|n'existe|pas\s+`|proscrit|interdit|Corrig", line):
-            return True
-    return False
-
-homonymes = []
-for term in list(bans):
-    _, ban_file = bans[term]
-    if prescrit_dans(docs.get(ban_file, ""), term):
-        homonymes.append((term, os.path.relpath(ban_file, H)))
-        del bans[term]
-
-out = []
-for term, (ban_dir, _bf) in bans.items():
-    # Prescription = le terme apparaît encadré et suivi d'un signe d'affectation ( : ou = ),
-    # forme sous laquelle ces documents énoncent une valeur de propriété.
-    presc = re.compile(r"`[^`]*\b" + re.escape(term) + r"\b\s*[:=][^`]*`")
-    for p, txt in docs.items():
-        d = os.path.dirname(p)
-        if not (d == ban_dir or d.startswith(ban_dir + os.sep)):
-            continue          # hors de la portée du niveau qui proscrit
-        if p.startswith(ban_dir) and os.path.dirname(p) == ban_dir:
-            pass              # le niveau qui proscrit peut se citer lui-même
-        for m in presc.finditer(txt):
-            frag = m.group(0)
-            # La ligne qui proscrit cite forcément le terme : on écarte les lignes négatives.
-            line_start = txt.rfind("\n", 0, m.start()) + 1
-            line_end = txt.find("\n", m.end())
-            line = txt[line_start:line_end if line_end != -1 else len(txt)]
-            if re.search(r"jamais|n'existe|pas\s+`|proscrit|interdit|Corrig", line):
-                continue
-            out.append("%s prescrit `%s`, proscrit par %s" % (
-                os.path.relpath(p, H), term, os.path.relpath(ban_dir, H) or "."))
-            break
-
-for line in sorted(set(out))[:10]:
-    print(line)
-for term, f in sorted(set(homonymes)):
-    print("HOMONYME\t%s\t%s" % (term, f))
-PY
-)
-_homo="$(printf '%s\n' "$_casc" | sed -n 's/^HOMONYME\t//p')"
-_casc="$(printf '%s\n' "$_casc" | grep -v '^HOMONYME' | sed '/^$/d')"
-if [ -n "$_casc" ]; then
-    warn "contradiction(s) de cascade — le niveau local prime, donc c'est le faux qui gagne :"
-    echo "$_casc" | sed 's/^/       /' >&2
-    _r=1
-fi
-if [ -n "$_homo" ]; then
-    echo "  ℹ️  terme(s) écartés comme homonymes — proscrits et prescrits par le même document,"
-    echo "$_homo" | awk -F'\t' '{printf "       `%s` dans %s\n", $1, $2}'
-    echo "       donc l'interdit n'est pas global. Non compté comme contradiction."
-fi
-[ "$_r" = 0 ] && ok "aucun terme proscrit par un niveau n'est prescrit sous lui"
 
 echo "[selftest] 38. Ce que la copie dépose et que le verrou refuse — texte seulement"
 # BLOQUANT, et c'est le contrôle d'une CLASSE, pas d'un cas. Le manifeste et le verrou sont
@@ -1357,92 +1262,6 @@ if [ -n "$(printf '%s' "$_c40" | tr -d '[:space:]')" ]; then
     echo "         soit retirer son rôle du document qui la cite. Ne pas laisser les trois en l'état." >&2
 else
     ok "aucune capacité déclarée opérante sans chemin d'invocation"
-fi
-
-echo "[selftest] 41. Fraîcheur des places de marché de greffons"
-# AVERTIT — un greffon en retard encombre, il ne désactive rien. Motif : le clone
-# d'une place de marché était figé depuis cinq semaines quand les deux autres se
-# rafraîchissaient le jour même. Le rafraîchissement tournait, mais pas pour celui-là : une
-# cadence morte, pas lente, et rien ne pouvait le voir. On ne compare pas à une date absolue
-# — on compare les places de marché ENTRE ELLES, ce qui distingue « personne ne s'est
-# rafraîchi depuis longtemps » (normal hors ligne) de « un seul a décroché » (le défaut).
-_MKT_LAG_DAYS=14
-_km="$HOME/.claude/plugins/known_marketplaces.json"
-if [ ! -f "$_km" ]; then
-    ok "aucune place de marché déclarée (rien à contrôler)"
-else
-    _c41="$(python3 - "$_km" "$_MKT_LAG_DAYS" <<'PY' 2>/dev/null
-import json, sys, datetime
-p, lag = sys.argv[1], int(sys.argv[2])
-try:
-    d = json.load(open(p, encoding="utf-8"))
-except Exception:
-    sys.exit(0)
-items = d.get("marketplaces", d) if isinstance(d, dict) else {}
-dates = {}
-for name, v in (items.items() if isinstance(items, dict) else []):
-    if not isinstance(v, dict):
-        continue
-    raw = v.get("lastUpdated")
-    if raw is None:
-        continue
-    try:
-        ts = float(raw)
-        dt = datetime.datetime.fromtimestamp(ts / 1000 if ts > 1e11 else ts)
-    except (TypeError, ValueError):
-        try:
-            dt = datetime.datetime.fromisoformat(str(raw).replace("Z", "+00:00")).replace(tzinfo=None)
-        except ValueError:
-            continue
-    dates[name] = dt
-if len(dates) < 2:
-    sys.exit(0)
-newest = max(dates.values())
-for name, dt in sorted(dates.items()):
-    behind = (newest - dt).days
-    if behind >= lag:
-        print(f"{name} : {behind} j derrière la plus fraîche ({dt:%Y-%m-%d})")
-PY
-)"
-    if [ -n "$_c41" ]; then
-        warn "place(s) de marché décrochée(s) de plus de $_MKT_LAG_DAYS jours sur les autres :"
-        printf '%s\n' "$_c41" | sed 's/^/       /' >&2
-        echo "       → rafraîchir le clone, ou diagnostiquer pourquoi lui seul ne se rafraîchit pas." >&2
-    else
-        ok "places de marché de greffons alignées entre elles"
-    fi
-fi
-
-echo "[selftest] 42. Compétences empruntées — origine déclarée et contrôle de dérive vivant"
-# AVERTIT. Deux moitiés, et surveiller le mécanisme ne remplace pas l'autre.
-# (a) Toute compétence empruntée doit déclarer son URL amont dans son corps : sans elle, le
-#     contrôle de dérive de l'audit ne peut pas la comparer, et elle est invisible au
-#     recensement. Constaté le 2026-08-07 : 9 emprunts réels, 4 surfacés par le recensement.
-# (b) Le marqueur du seul mécanisme automatique ne doit pas être figé — un marqueur qui ne
-#     bouge plus signale un contrôle mort, pas une absence de dérive.
-# Pas d'appel réseau ici : la plomberie tourne avant chaque sauvegarde.
-_c42=""
-for _sk in "$HOME"/.claude/skills/*/SKILL.md; do
-    [ -f "$_sk" ] || continue
-    _n="$(basename "$(dirname "$_sk")")"
-    [ "$_n" = "os-audit" ] && continue   # parle des emprunts sans en être un
-    grep -qE '\*\*Emprunt|\*\*Adaptation ClaudeOS' "$_sk" || continue
-    grep -qE 'https?://' "$_sk" || _c42="$_c42$_n : emprunt déclaré sans URL amont"$'\n'
-done
-_mk="$HOME/.claude/skills/grilling/.last_upstream_check"
-if [ -f "$_mk" ]; then
-    _seen="$(tr -d '[:space:]' < "$_mk")"
-    _now="$(date +%Y-%m)"; _prev="$(date -d '1 month ago' +%Y-%m 2>/dev/null || echo "$_now")"
-    case "$_seen" in
-        "$_now"|"$_prev") ;;
-        *) _c42="$_c42marqueur de dérive amont figé à '$_seen' (mois courant : $_now) — contrôle mort"$'\n' ;;
-    esac
-fi
-if [ -n "$(printf '%s' "$_c42" | tr -d '[:space:]')" ]; then
-    warn "contrôle de dérive amont incomplet :"
-    printf '%s' "$_c42" | sed '/^$/d; s/^/       /' >&2
-else
-    ok "emprunts déclarés avec leur URL amont, marqueur de dérive à jour"
 fi
 
 

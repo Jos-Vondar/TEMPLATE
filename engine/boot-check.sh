@@ -297,6 +297,29 @@ fi
 # #7 : dernier backup fait HORS-LIGNE ? (garde-fou de fraîcheur évalué sur ref périmée)
 [ -f "$SELF/.last-offline-backup" ] && OUT="${OUT}⚠️ Dernier backup fait HORS-LIGNE (fraîcheur non garantie) — vérifie le retard: bash ~/.claudeos/engine/sync.sh"$'\n'
 
+# --- Avertissements du dernier autotest (2026-08-14) --------------------------
+# La sauvegarde les enregistre (synclib.sh, claudeos_selftest_warns_record) ; ici on les
+# relaie au réveil, comme les autres marqueurs — sans ce relais, ils n'existaient que
+# dans une sortie que le hook redirige vers un journal que personne ne lit. Anti-bruit :
+# le DÉTAIL le jour où l'ensemble change, une seule ligne — compte + ancienneté — ensuite.
+# L'ancienneté affichée dit d'elle-même qu'un avertissement traîne ; le traiter fait
+# disparaître la ligne à la sauvegarde suivante. LECTURE SEULE, comme tout ce script :
+# l'état appartient à backup.sh. Bloc ALERTES, donc hors du calcul de poids (#21).
+ST_BILAN="$(claudeos_selftest_warns_bilan)"
+if [ -n "$ST_BILAN" ]; then
+    ST_TETE="$(printf '%s\n' "$ST_BILAN" | head -1)"
+    ST_DEPUIS="${ST_TETE%%$'\t'*}"; ST_N="${ST_TETE##*$'\t'}"
+    if [ "$ST_DEPUIS" = "$(date '+%Y-%m-%d')" ]; then
+        OUT="${OUT}⚠️ ${ST_N} avertissement(s) à l'autotest de plomberie — ensemble nouveau ou modifié aujourd'hui :"$'\n'
+        while IFS= read -r _sw || [ -n "$_sw" ]; do
+            [ -z "$_sw" ] && continue
+            OUT="${OUT}      ↳ ${_sw}"$'\n'
+        done < <(printf '%s\n' "$ST_BILAN" | tail -n +2)
+    else
+        OUT="${OUT}⚠️ ${ST_N} avertissement(s) d'autotest, inchangés depuis ${ST_DEPUIS} — détail : bash ~/.claudeos/engine/selftest.sh"$'\n'
+    fi
+fi
+
 # Journal de session périmé ? (rituel de clôture qui ne tourne plus)
 JDATE=$(grep -m1 -oE '^## [0-9]{4}-[0-9]{2}-[0-9]{2}' "$MEM/SESSION_JOURNAL.md" 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
 if [ -n "$JDATE" ]; then

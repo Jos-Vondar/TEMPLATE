@@ -11,18 +11,20 @@
 #   assemble-rules.sh --vraies "" --essai <dossier>   (essai à blanc sur une copie)
 #
 # Conditions reconnues : MULTIPOSTE MULTIDOMAINE LIVRABLE CONFIDENTIEL PROXY
+#                        SUPERVISION CODE_RELU SOLLICITATIONS RIGUEUR_AFFICHEE CONCISION
 # Les autres sont tenues pour vraies et n'ont pas de marqueur dans le gabarit.
 # =============================================================================
 set -uo pipefail
 
-CONNUES="MULTIPOSTE MULTIDOMAINE LIVRABLE CONFIDENTIEL PROXY"
+CONNUES="MULTIPOSTE MULTIDOMAINE LIVRABLE CONFIDENTIEL PROXY SUPERVISION CODE_RELU SOLLICITATIONS RIGUEUR_AFFICHEE CONCISION"
 VRAIES=""
 CIBLE="$HOME/.claude"
+ESSAI=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --vraies) VRAIES="${2-}"; shift 2 ;;
-        --essai)  CIBLE="${2-}"; [ -d "$CIBLE" ] || { echo "[assemble] ERREUR : dossier d'essai introuvable : $CIBLE" >&2; exit 2; }; shift 2 ;;
+        --essai)  CIBLE="${2-}"; ESSAI=1; [ -d "$CIBLE" ] || { echo "[assemble] ERREUR : dossier d'essai introuvable : $CIBLE" >&2; exit 2; }; shift 2 ;;
         *) echo "[assemble] ERREUR : argument inconnu '$1'. Attendu : --vraies <liste>, --essai <dossier>." >&2; exit 2 ;;
     esac
 done
@@ -51,6 +53,15 @@ est_vraie() {
 # Le fichier est la mémoire de l'entretien. Son ABSENCE vaut « tout est vrai » : un système
 # installé autrement, ou plus ancien que ce mécanisme, doit être contrôlé au maximum, pas au
 # minimum. Le défaut sûr est du côté qui vérifie trop.
+# CE BLOC NE S'EXÉCUTE PAS EN MODE ESSAI, et c'est le point. Le chemin ci-dessous est résolu
+# depuis l'emplacement du SCRIPT, jamais depuis la cible : sans cette garde, un essai à blanc
+# écrivait ce fichier dans l'arborescence réelle, avec la liste passée à l'essai. Un essai à
+# blanc qui écrit désarme en silence tous les contrôles conditionnels de l'autotest — le
+# fichier existant, son absence ne vaut plus « tout est vrai ». Défaut mesuré le 2026-08-14,
+# doctrine déjà énoncée plus bas (« l'essai ne touche que sa copie ») mais pas appliquée ici.
+if [ "$ESSAI" -eq 1 ]; then
+    echo "[assemble] Essai à blanc : conditions NON écrites (l'essai ne touche que sa copie)."
+else
 _CONF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config/CONDITIONS"
 mkdir -p "$(dirname "$_CONF")"
 {
@@ -60,6 +71,7 @@ mkdir -p "$(dirname "$_CONF")"
     for x in "${_v[@]}"; do [ -n "$x" ] && echo "$x"; done
 } > "$_CONF"
 echo "[assemble] Conditions écrites   : $_CONF"
+fi
 
 REGLEMENT="$CIBLE/CLAUDE.md"
 [ -f "$REGLEMENT" ] || { echo "[assemble] ERREUR : règlement introuvable : $REGLEMENT" >&2; exit 2; }
@@ -78,7 +90,7 @@ while IFS= read -r ligne; do
     fi
     case "$ligne" in
         *"<!-- CONDITION "*)
-            cond="$(printf '%s' "$ligne" | sed -n 's/.*<!-- CONDITION \([A-Z]*\) -->.*/\1/p')"
+            cond="$(printf '%s' "$ligne" | sed -n 's/.*<!-- CONDITION \([A-Z_]*\) -->.*/\1/p')"
             case " $CONNUES " in
                 *" $cond "*) ;;
                 *) echo "[assemble] ERREUR : le gabarit porte une condition inconnue : '$cond'" >&2; rm -f "$TMP"; exit 2 ;;
@@ -86,8 +98,8 @@ while IFS= read -r ligne; do
             if est_vraie "$cond"; then
                 # Gardé : on retire les marqueurs, y compris les guillemets obliques
                 # qui les entourent dans les tableaux, et l'espace qu'ils laissent.
-                printf '%s\n' "$ligne" | sed -e 's/`<!-- CONDITION [A-Z]* -->` //g' \
-                                             -e 's/<!-- CONDITION [A-Z]* --> //g' \
+                printf '%s\n' "$ligne" | sed -e 's/`<!-- CONDITION [A-Z_]* -->` //g' \
+                                             -e 's/<!-- CONDITION [A-Z_]* --> //g' \
                                              -e 's/ `<!-- FIN -->`//g' -e 's/`<!-- FIN -->`//g' \
                                              -e 's/ <!-- FIN -->//g' -e 's/<!-- FIN -->//g' >> "$TMP"
                 GARDES=$((GARDES+1))
@@ -95,6 +107,13 @@ while IFS= read -r ligne; do
                 RETIRES="$RETIRES $cond"
                 case "$ligne" in *"<!-- FIN -->"*) ;; *) SUPPRIME=1 ;; esac
             fi
+            ;;
+        *"<!-- FIN -->"*)
+            # Fermeture d'un bloc multi-lignes CONSERVÉ (le retiré est absorbé plus haut).
+            # Sans ce cas, le marqueur passait tel quel et la garde finale échouait — le
+            # chemin « bloc multi-lignes gardé » n'avait jamais été exercé avant 2026-08-14.
+            printf '%s\n' "$ligne" | sed -e 's/ `<!-- FIN -->`//g' -e 's/`<!-- FIN -->`//g' \
+                                         -e 's/ <!-- FIN -->//g' -e 's/<!-- FIN -->//g' >> "$TMP"
             ;;
         *) printf '%s\n' "$ligne" >> "$TMP" ;;
     esac

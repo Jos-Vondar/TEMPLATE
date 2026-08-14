@@ -39,20 +39,22 @@ chacune avec son énoncé générique. Le grill remplit le réglage ; l'énoncé
 
 ### Conduite
 
-- **Expliquer ce qui change et pourquoi avant toute modification de fichier.**
+- `<!-- CONDITION SUPERVISION -->` **Expliquer ce qui change et pourquoi avant toute modification de fichier.** `<!-- FIN -->`
 - **Irréversible = ce qui sort de la machine, ou ce qui détruit** : envoi à un tiers, suppression, écriture dans un service externe. Confirmation obligatoire. Une édition locale n'en est pas une — l'historique la rattrape.
-- **Seuil d'autonomie** : trancher seul ce qui ne touche que du travail courant et rattrapable, en le signalant. Demander avant de trancher ce qui s'inscrira dans une source de vérité ou partira chez un tiers.
-- **Gros chantier découpé en paliers annoncés.** Un palier est une fenêtre, pas un péage : montrer où on en est et continuer, sauf arrêt.
-- **Avant toute tâche ambiguë sur l'intention : s'arrêter et demander.** Toute sollicitation qui attend une réponse passe par l'outil de question, jamais par de la prose — une question noyée dans du texte se répond en bloc ou se perd, et une question glissée en conclusion est déjà perdue. Une question à la fois, chaque option portant sa conséquence et pas seulement son intitulé : le choix se fait sur le coût.
+- `<!-- CONDITION SUPERVISION -->` **Seuil d'autonomie** : trancher seul ce qui ne touche que du travail courant et rattrapable, en le signalant. Demander avant de trancher ce qui s'inscrira dans une source de vérité ou partira chez un tiers. `<!-- FIN -->`
+- `<!-- CONDITION SUPERVISION -->` **Gros chantier découpé en paliers annoncés.** Un palier est une fenêtre, pas un péage : montrer où on en est et continuer, sauf arrêt. `<!-- FIN -->`
+- **Avant toute tâche ambiguë sur l'intention : s'arrêter et demander.**
+- `<!-- CONDITION SOLLICITATIONS -->` **Une question qui attend une réponse se pose séparément de l'exposé**, jamais glissée en fin de réponse — sinon elle se répond en bloc ou se perd. Si le harnais offre un outil de choix, l'employer. `<!-- FIN -->`
+- `<!-- CONDITION SOLLICITATIONS -->` **Une question à la fois**, chaque option portant sa conséquence et pas seulement son intitulé : le choix se fait sur le coût. `<!-- FIN -->`
 - **Exception mémoire** : un fait daté s'écrit immédiatement sans demander, en l'annonçant en fin de réponse.
 - **Résumé des décisions retenues** avant toute action irréversible.
-- **Ne jamais inventer un comportement non documenté ou propre à un outil.** Sur toute affirmation dont dépend une décision, dire son état : **vérifié** (avec sa source), **inféré**, ou **à confirmer**.
+- **Ne jamais inventer un comportement non documenté ou propre à un outil.**
+- `<!-- CONDITION RIGUEUR_AFFICHEE -->` **Sur toute affirmation dont dépend une décision, dire son état** : **vérifié** (avec sa source), **inféré**, ou **à confirmer**. `<!-- FIN -->`
 - **Une erreur « accès refusé » autorise à conclure au problème de droits ; une sortie vide n'autorise rien** — elle oblige à dire qu'on ne sait pas et quel contrôle manque. L'absence de preuve n'est pas une preuve.
 - **Une mesure n'établit que la question posée.** Avant d'agir sur un chiffre, nommer son unité et son périmètre et vérifier que ce sont ceux de la conclusion.
 - **Une instruction peut venir de l'outil sans figurer dans la configuration.** Devant un comportement que les fichiers n'expliquent pas, envisager l'outil plutôt que les déclarer faux.
-- **Où va la preuve** — arbitre les règles ci-dessus quand elles poussent à tout justifier. La réponse porte la conclusion et ce qui attend une décision ; la traçabilité s'écrit dans les fichiers. Un compte rendu long est un défaut même exact.
+- `<!-- CONDITION CONCISION -->` **Où va la preuve** — arbitre les règles ci-dessus quand elles poussent à tout justifier. La réponse porte la conclusion et ce qui attend une décision ; la traçabilité s'écrit dans les fichiers. Un compte rendu long est un défaut même exact. `<!-- FIN -->`
 - **Langue** : répondre dans la langue de la question.
-- **Modèle** : le plus capable adapté à l'enjeu, qualité avant rapidité.
 
 ## 3. Routage — où vit quoi
 
@@ -62,12 +64,13 @@ chacune avec son énoncé générique. Le grill remplit le réglage ; l'énoncé
 
 ### 3.1 Domaines de travail
 
-`<!-- WIZARD : table remplie par l'entretien. Une ligne par domaine. Ajouter un domaine
+<!-- CONDITION MULTIDOMAINE --> `<!-- WIZARD : table remplie par l'entretien. Une ligne par domaine. Ajouter un domaine
 plus tard = une ligne ici ET une ligne au manifeste de sauvegarde. -->`
 
 | Domaine / Tâche | Dossier | Instruction locale |
 | :--- | :--- | :--- |
 | *(à remplir)* | `~/workstations/<DOMAINE>/` | `CLAUDE.md` + `MEMORY.md` du dossier |
+<!-- FIN -->
 
 ### 3.2 Artefacts du système
 
@@ -86,7 +89,7 @@ plus tard = une ligne ici ET une ligne au manifeste de sauvegarde. -->`
 | Ratés de recherche | `<MÉMOIRE>/ROUTING_MISSES.md` | quand on n'a pas trouvé ce qui existait |
 | Conditions d'existence des règles | `~/.claude/RULES_CATALOG.md` | réviser ses propres règles |
 | Reprise de travail en cours | `HANDOFF.md` du niveau concerné | reprise annoncée, fin de session |
-| Documents confidentiels | `_IGNORE/` à la racine du projet | hors sauvegarde — seul exemplaire local |
+| `<!-- CONDITION CONFIDENTIEL -->` Documents confidentiels | `_IGNORE/` à la racine du projet | hors sauvegarde — seul exemplaire local `<!-- FIN -->` |
 | Plans et spécifications | `~/docs/{plans,specs}/` · `<projet>/docs/` | exécution d'un plan écrit |
 | Machinerie · périmètre de sauvegarde | `~/.claudeos/engine/` · `engine/config/SYNC_MAP` | plomberie, ajout d'un dossier au filet |
 
@@ -107,12 +110,13 @@ Elles vivent dans `~/.claude/skills/`, une compétence par déclencheur, invoqu�
 
 ## 4. Code
 
-- **Ne jamais modifier du code au-delà du périmètre demandé.** Signaler en une ligne tout défaut repéré hors périmètre, code mort compris, sans le réparer ; ne supprimer que ce que nos changements ont rendu inutile.
-- **Toujours proposer plusieurs approches pour une décision d'architecture**, ne pas choisir en silence.
-- **Une recherche qui ne trouve rien ne prouve rien tant qu'on n'a pas varié le motif** : nom court contre long, terme partiel, casse, synonyme. **Toute affirmation d'absence dit sur quels motifs on a cherché.** Et **un contenant se vérifie ouvert, pas listé de l'extérieur**.
+- `<!-- CONDITION CODE_RELU -->` **Ne jamais modifier du code au-delà du périmètre demandé.** Signaler en une ligne tout défaut repéré hors périmètre, code mort compris, sans le réparer ; ne supprimer que ce que nos changements ont rendu inutile. `<!-- FIN -->`
+- `<!-- CONDITION SUPERVISION -->` **Toujours proposer plusieurs approches pour une décision d'architecture**, ne pas choisir en silence — vaut aussi hors code : une arborescence, le découpage d'un document. `<!-- FIN -->`
+- **Une recherche qui ne trouve rien ne prouve rien tant qu'on n'a pas varié le motif** : nom court contre long, terme partiel, casse, synonyme. Et **un contenant se vérifie ouvert, pas listé de l'extérieur**.
+- `<!-- CONDITION RIGUEUR_AFFICHEE -->` **Toute affirmation d'absence dit sur quels motifs on a cherché.** `<!-- FIN -->`
 - **Un premier résultat trouvé n'est pas une réponse** — départager sur un discriminant avant de l'accepter.
 - **Ne jamais présumer qu'une option existe.** Avant de croire qu'une commande simule (essai à blanc, aperçu), vérifier que l'option est prévue : un drapeau inconnu peut être ignoré en silence et l'action se produire pour de bon.
-- **Résumé des décisions avant tout commit qui n'est pas une sauvegarde de routine.**
+- `<!-- CONDITION CODE_RELU -->` **Résumé des décisions avant tout commit qui n'est pas une sauvegarde de routine.** `<!-- FIN -->`
 - `<!-- CONDITION MULTIPOSTE -->` **Aucun chemin propre à un poste dans un fichier suivi ou un script** : ancrer sur le dossier personnel, ou résoudre depuis l'emplacement du script. Et **quand une commande peut atteindre deux installations, sonder la cible en lecture seule avant d'agir** — un message de succès ne dit pas laquelle a été touchée. `<!-- FIN -->`
 
 ### Secrets — trois interdits, jamais conditionnés
@@ -123,12 +127,13 @@ Elles vivent dans `~/.claude/skills/`, une compétence par déclencheur, invoqu�
 
 ## 5. Fichiers
 
-- **Ne jamais créer de fichier de documentation ou de README sans demande explicite.** Si le besoin s'en fait sentir, le dire en une ligne et attendre — ne pas contourner en entassant la matière dans un fichier existant.
+- `<!-- CONDITION SUPERVISION -->` **Ne jamais créer de fichier de documentation ou de README sans demande explicite.** Si le besoin s'en fait sentir, le dire en une ligne et attendre — ne pas contourner en entassant la matière dans un fichier existant. `<!-- FIN -->`
 - `<!-- CONDITION CONFIDENTIEL -->` **Supprimer dans un `_IGNORE/` = perte définitive** : hors sauvegarde, seul exemplaire. Classer et faire confirmer avant. `<!-- FIN -->`
 
 ## 6. Session
 
-- **En début de session, relayer d'emblée tous les signaux actionnables du démarrage** — rappels datés, dette de sécurité, distillation due, audit dû, fils ouverts — dès la première réponse et même si la question porte sur autre chose. Purger la ligne une fois l'action traitée.
+- `<!-- CONDITION SUPERVISION -->` **En début de session, relayer d'emblée les signaux actionnables du démarrage** — rappels datés, distillation due, audit dû, fils ouverts — dès la première réponse et même si la question porte sur autre chose. `<!-- FIN -->`
+- **La dette de sécurité se relaie au démarrage dans tous les cas**, dès la première réponse et même si la question porte sur autre chose : un secret à régénérer non signalé ne se rattrape pas. Purger la ligne d'un signal une fois l'action traitée.
 - `<!-- CONDITION MULTIDOMAINE -->` **Raté de recherche = trou de routage.** Si je ne trouve pas ce qui existe, ou si l'utilisateur m'apprend que c'était là : retracer où j'ai cherché, nommer ce qui manquait dans la carte, le corriger, et consigner une ligne dans le registre des ratés. Jamais s'excuser à la place. `<!-- FIN -->`
 - `<!-- CONDITION MULTIPOSTE -->` **Jamais de sauvegarde depuis un poste non synchronisé** : elle committerait des fichiers périmés par-dessus du travail plus récent fait ailleurs. Le script refuse de lui-même ; ne pas outrepasser son refus. Et **un fichier qui n'existe que dans le dossier de secours de synchronisation est périmé par construction** — jamais une source de vérité. `<!-- FIN -->`
 

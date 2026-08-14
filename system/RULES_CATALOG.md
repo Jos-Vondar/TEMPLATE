@@ -24,6 +24,11 @@ L'entretien ne pose pas quarante questions : il pose celles-ci, et chacune ouvre
 | `CODE` | *(tenue pour vraie — quiconque installe ce système écrit du code)* |
 | `PLOMBERIE` | *(tenue pour vraie — le moteur est livré)* |
 | `PROXY` | *(pas une question — le script d'installation détecte l'outil)* |
+| `SUPERVISION` | Quand l'assistant travaille sur tes fichiers, veux-tu qu'il t'annonce chaque changement avant de le faire et qu'il te rende la main aux étapes clés — ou qu'il avance seul et te rende compte à la fin ? *(fausse si « avance seul »)* |
+| `CODE_RELU` | Ton code passe-t-il sous les yeux d'autres personnes — revue, pull request, équipe ? |
+| `SOLLICITATIONS` | Quand l'assistant a besoin d'une décision de ta part, préfères-tu qu'il s'arrête et te pose un choix explicite avec ses options — ou qu'il propose au fil du texte et continue ? *(fausse si « au fil du texte »)* |
+| `RIGUEUR_AFFICHEE` | Veux-tu que l'assistant marque explicitement le statut de ce qu'il affirme — vérifié, supposé, à confirmer — et dise sur quoi il a cherché quand il conclut qu'une chose n'existe pas ? Ou préfères-tu la réponse seule ? *(fausse si « la réponse seule »)* |
+| `CONCISION` | Réponse courte — la conclusion et ce qui attend ta décision, le détail dans les fichiers — ou compte rendu complet du raisonnement dans la réponse ? *(fausse si « compte rendu complet »)* |
 
 **Pourquoi certaines conditions ne sont pas demandées.**
 
@@ -32,7 +37,7 @@ L'entretien ne pose pas quarante questions : il pose celles-ci, et chacune ouvre
 - Déléguer à un sous-agent n'est pas un choix de l'utilisateur mais une décision de l'assistant : la question ne se pose donc pas à lui.
 - `PROXY` est détectée par le script d'installation, pas demandée.
 
-**L'entretien compte donc quatre questions binaires** — plusieurs postes, plusieurs domaines, livrables pour des tiers, documents confidentiels — plus l'entretien de persona, qui compte douze rubriques et où passe le temps.
+**L'entretien compte donc quatre questions binaires** — plusieurs postes, plusieurs domaines, livrables pour des tiers, documents confidentiels — **plus cinq questions de conduite** — supervision, code relu, sollicitations, rigueur affichée, concision — plus l'entretien de persona, qui compte douze rubriques et où passe le temps.
 
 ---
 ## A. Gouvernance du fichier de règles
@@ -48,6 +53,7 @@ L'entretien ne pose pas quarante questions : il pose celles-ci, et chacune ouvre
 | :--- | :--- | :--- |
 | **Règle de tri, trois destinations** — comportement de l'assistant → `CLAUDE.md` ; fait daté ou statut → `MEMORY.md` ; comportement voulu du système → `DESIGN.md`. | Un fait rangé au hasard se retrouve en double à deux âges différents, donc en contradiction. | `MEMOIRE` |
 | **Un fait vit en un seul lieu, plus des pointeurs.** | Deux copies à deux âges = contradiction garantie. | `MEMOIRE` |
+| **Un fait calculable ne s'écrit pas, il se lit.** | Un compte, une taille, un seuil recopié devient faux sans prévenir — la source, elle, reste juste. | `MEMOIRE` |
 | **Faits durables contre faits vivants** — identité et préférences sont durables ; contenu d'un dossier, état d'un déploiement, statut d'un ticket sont du *dernier état connu* et se revérifient à leur source avant toute action conséquente. | Un fait vivant traité comme durable fait agir sur une photo périmée. | `MEMOIRE` |
 | **Un fait vivant écrit sans sa date et sa source est à revérifier, pas à croire.** | Sans provenance, impossible de savoir si l'on lit une observation ou un souvenir. | `MEMOIRE` |
 | **Avant tout travail de fond, consulter la carte de rappel et chercher les décisions passées** au lieu de s'en tenir à ce que le routage a chargé. | Redécider une chose déjà tranchée coûte plus cher que la retrouver. | `MEMOIRE` |
@@ -57,27 +63,27 @@ L'entretien ne pose pas quarante questions : il pose celles-ci, et chacune ouvre
 
 | Règle | Motif | Condition |
 | :--- | :--- | :--- |
-| **Expliquer ce qui change et pourquoi avant toute modification de fichier.** | Une modification non annoncée se découvre après coup, quand elle est déjà partout. | `SOCLE` |
+| **Expliquer ce qui change et pourquoi avant toute modification de fichier.** | Une modification non annoncée se découvre après coup, quand elle est déjà partout. | `SUPERVISION` |
 | **Irréversible = ce qui sort de la machine, ou ce qui détruit** — envoi à un tiers, suppression, écriture dans un service externe. Confirmation obligatoire. Une édition locale n'en est pas une : l'historique la rattrape. | Sans définition, soit on confirme tout et la confirmation ne veut plus rien dire, soit on ne confirme rien. | `SOCLE` |
-| **Seuil d'autonomie** — trancher seul ce qui ne touche que du travail courant et rattrapable, en le signalant. Demander avant de trancher ce qui s'inscrira dans une source de vérité ou partira chez un tiers. | Demander sur tout est aussi coûteux que ne jamais demander. | `SOCLE` |
-| **Gros chantier découpé en paliers annoncés** — un palier est une fenêtre, pas un péage : montrer où on en est et continuer, sauf arrêt. | Un chantier sans palier ne se pilote pas ; un palier bloquant transforme le pilotage en péage. | `SOCLE` |
-| **Toute sollicitation qui attend une réponse passe par l'outil de question, jamais par de la prose.** Une question noyée dans du texte se répond en bloc ou se perd ; glissée en conclusion, elle est déjà perdue. | Constaté : les questions posées en fin de réponse ne reçoivent pas de réponse. | `SOCLE` |
-| **Poser une question à la fois, chaque option portant sa conséquence et pas seulement son intitulé.** | Le choix se fait sur le coût, pas sur le libellé. | `SOCLE` |
+| **Seuil d'autonomie** — trancher seul ce qui ne touche que du travail courant et rattrapable, en le signalant. Demander avant de trancher ce qui s'inscrira dans une source de vérité ou partira chez un tiers. | Demander sur tout est aussi coûteux que ne jamais demander. | `SUPERVISION` |
+| **Gros chantier découpé en paliers annoncés** — un palier est une fenêtre, pas un péage : montrer où on en est et continuer, sauf arrêt. | Un chantier sans palier ne se pilote pas ; un palier bloquant transforme le pilotage en péage. | `SUPERVISION` |
+| **Une question qui attend une réponse se pose séparément de l'exposé**, jamais glissée en fin de réponse — sinon elle se répond en bloc ou se perd. Si le harnais offre un outil de choix, l'employer. | Une question fondue dans l'exposé reçoit la réponse de l'exposé, pas la sienne. | `SOLLICITATIONS` |
+| **Poser une question à la fois, chaque option portant sa conséquence et pas seulement son intitulé.** | Le choix se fait sur le coût, pas sur le libellé. | `SOLLICITATIONS` |
 | **Avant toute tâche ambiguë sur l'intention : s'arrêter et demander.** | Une intention devinée de travers produit du travail entier à jeter. | `SOCLE` |
 | **Exception mémoire** — les faits datés s'écrivent immédiatement sans demander, en l'annonçant en fin de réponse. | Demander l'autorisation d'écrire un fait réversible coûte plus que l'écrire. | `MEMOIRE` |
-| **Résumé des décisions retenues avant tout commit non routinier et avant toute action irréversible.** | On ne valide pas ce qu'on n'a pas relu. | `CODE` *(la moitié « action irréversible » reste au socle ; c'est le commit qui présuppose un flux git)* |
+| **Résumé des décisions retenues avant tout commit non routinier et avant toute action irréversible.** | On ne valide pas ce qu'on n'a pas relu. | `CODE_RELU` *(la moitié « action irréversible » reste au socle ; c'est le commit relu par d'autres qui fait la condition)* |
 | **Répondre dans la langue de la question.** | — | `SOCLE` |
-| **Sélection du modèle : le plus capable adapté à l'enjeu, qualité avant rapidité.** | Figer un modèle par type de tâche fait payer la même erreur longtemps. | `SOCLE` |
 
 ## D. Conduite — ce qui exige de la rigueur sur les faits
 
 | Règle | Motif | Condition |
 | :--- | :--- | :--- |
-| **Ne jamais inventer un comportement non documenté ou propre à un outil.** Sur toute affirmation dont dépend une décision, dire son état : vérifié (avec sa source), inféré, ou à confirmer. | Un comportement supposé d'un connecteur se paie en production. | `SOCLE` |
+| **Ne jamais inventer un comportement non documenté ou propre à un outil.** | Un comportement supposé d'un connecteur se paie en production. | `SOCLE` |
+| **Sur toute affirmation dont dépend une décision, dire son état** : vérifié (avec sa source), inféré, ou à confirmer. | Une affirmation sans statut se lit comme vérifiée, quel que soit son état réel. | `RIGUEUR_AFFICHEE` |
 | **Une erreur « accès refusé » autorise à conclure au problème de droits ; une sortie vide n'autorise rien** — elle oblige à dire qu'on ne sait pas et quel contrôle manque. L'absence de preuve n'est pas une preuve. | Une sortie vide a été lue comme un succès. | `SOCLE` |
 | **Une mesure n'établit que la question posée** — avant d'agir sur un chiffre, nommer son unité et son périmètre, et vérifier que ce sont ceux de la conclusion. | Un chiffre juste sur une autre question est un chiffre faux. | `SOCLE` |
 | **Une instruction peut venir de l'outil sans figurer dans la configuration** — devant un comportement que les fichiers n'expliquent pas, envisager l'outil plutôt que déclarer les fichiers faux. | Fait instable, propre au poste, qui a fait accuser la configuration à tort. | `SOCLE` |
-| **Où va la preuve** — la réponse porte la conclusion et ce qui attend une décision ; la traçabilité s'écrit dans les fichiers. Un compte rendu long est un défaut même exact. | Les règles de rigueur ci-dessus poussent à tout justifier dans la réponse ; celle-ci arbitre. | `SOCLE` |
+| **Où va la preuve** — la réponse porte la conclusion et ce qui attend une décision ; la traçabilité s'écrit dans les fichiers. Un compte rendu long est un défaut même exact. | Les règles de rigueur ci-dessus poussent à tout justifier dans la réponse ; celle-ci arbitre. | `CONCISION` |
 
 ## E. Persona — rubriques à remplir, contenu produit par le grill
 
@@ -112,9 +118,10 @@ L'entretien ne pose pas quarante questions : il pose celles-ci, et chacune ouvre
 
 | Règle | Motif | Condition |
 | :--- | :--- | :--- |
-| **Ne jamais modifier du code au-delà du périmètre demandé** — signaler en une ligne tout défaut hors périmètre, code mort compris, sans le réparer. Ne supprimer que ce que nos changements ont rendu inutile. | Une correction non demandée mélange deux intentions dans un même changement. | `CODE` |
-| **Toujours proposer plusieurs approches pour une décision d'architecture**, ne pas choisir en silence. | Un choix d'architecture silencieux se découvre quand il coûte cher d'en changer. | `CODE` |
-| **Une recherche qui ne trouve rien ne prouve rien tant qu'on n'a pas varié le motif** — nom court contre long, terme partiel, casse, synonyme. Toute affirmation d'absence dit sur quels motifs on a cherché. | Conclure à l'absence sur un seul motif est la façon la plus courante d'affirmer du faux. | `CODE` |
+| **Ne jamais modifier du code au-delà du périmètre demandé** — signaler en une ligne tout défaut hors périmètre, code mort compris, sans le réparer. Ne supprimer que ce que nos changements ont rendu inutile. | Une correction non demandée mélange deux intentions dans un même changement — et c'est le relecteur qui les démêle. | `CODE_RELU` |
+| **Toujours proposer plusieurs approches pour une décision d'architecture**, ne pas choisir en silence. | Un choix d'architecture silencieux se découvre quand il coûte cher d'en changer. Curseur d'autonomie, pas une affaire de code : vaut aussi pour une arborescence ou le découpage d'un document. | `SUPERVISION` |
+| **Une recherche qui ne trouve rien ne prouve rien tant qu'on n'a pas varié le motif** — nom court contre long, terme partiel, casse, synonyme. | Conclure à l'absence sur un seul motif est la façon la plus courante d'affirmer du faux. | `CODE` |
+| **Toute affirmation d'absence dit sur quels motifs on a cherché.** | Les nommer force à les varier ; sans eux, le lecteur ne peut pas juger la conclusion. La discipline de varier reste au socle ; c'est son affichage qui est conditionné. | `RIGUEUR_AFFICHEE` |
 | **Un contenant se vérifie ouvert, pas listé de l'extérieur.** | Lister un dossier ne dit pas ce que contiennent ses fichiers. | `CODE` |
 | **Un premier résultat trouvé n'est pas une réponse** — départager sur un discriminant avant de l'accepter. | Symétrique du précédent : le premier match n'est pas le bon match. | `CODE` |
 | **Quand une commande peut atteindre deux installations, sonder la cible en lecture seule avant d'agir.** | Un message de succès ne dit pas laquelle a été touchée. | `CODE` + `MULTIPOSTE` |
@@ -134,7 +141,7 @@ L'entretien ne pose pas quarante questions : il pose celles-ci, et chacune ouvre
 
 | Règle | Motif | Condition |
 | :--- | :--- | :--- |
-| **Ne jamais créer de fichier de documentation sans demande explicite.** Si le besoin se fait sentir, le dire en une ligne et attendre — ne pas contourner en entassant la matière dans un fichier existant. | La documentation non demandée prolifère et personne ne la lit. | `SOCLE` |
+| **Ne jamais créer de fichier de documentation sans demande explicite.** Si le besoin se fait sentir, le dire en une ligne et attendre — ne pas contourner en entassant la matière dans un fichier existant. | La documentation non demandée prolifère et personne ne la lit. | `SUPERVISION` |
 | **Réceptacle local pour les documents confidentiels**, hors sauvegarde, à la racine du projet concerné. | Un document client dans un dépôt distant est une fuite, même en dépôt privé. | `CONFIDENTIEL` |
 | **Supprimer dans le réceptacle = perte définitive** : hors sauvegarde, seul exemplaire. Classer et faire confirmer avant. | Pas d'historique pour rattraper. | `CONFIDENTIEL` |
 
@@ -149,7 +156,8 @@ L'entretien ne pose pas quarante questions : il pose celles-ci, et chacune ouvre
 
 | Règle | Motif | Condition |
 | :--- | :--- | :--- |
-| **Relayer d'emblée tous les signaux actionnables du démarrage**, dès la première réponse et même si la question porte sur autre chose. Purger la ligne une fois traitée. | Un signal relayé en fin de session est un signal perdu. | `PLOMBERIE` |
+| **Relayer d'emblée les signaux actionnables du démarrage** — rappels datés, distillation due, audit dû, fils ouverts — dès la première réponse et même si la question porte sur autre chose. | Un signal relayé en fin de session est un signal perdu. | `PLOMBERIE` + `SUPERVISION` |
+| **La dette de sécurité se relaie au démarrage dans tous les cas**, dès la première réponse. Purger la ligne d'un signal une fois l'action traitée. | Qui répond « avance seul » demande moins de points d'arrêt, pas de cesser d'être averti qu'un secret traîne à régénérer — un secret compromis non signalé est d'une autre nature qu'un rappel manqué. | `PLOMBERIE` *(jamais conditionnée à la supervision)* |
 | **Jamais de sauvegarde depuis un poste non synchronisé** — elle committerait des fichiers périmés par-dessus du travail plus récent fait ailleurs. Ne pas outrepasser le refus du script. | Modèle séquentiel à plusieurs postes : un seul actif à la fois. | `MULTIPOSTE` + `PLOMBERIE` |
 | **Une copie de secours datée d'avant une synchronisation est périmée par construction** : jamais une source de vérité. | On restaure depuis le dépôt, pas depuis le filet. | `MULTIPOSTE` + `PLOMBERIE` |
 

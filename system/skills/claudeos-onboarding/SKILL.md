@@ -35,7 +35,7 @@ Quatre questions, une à la fois, par l'outil de question et jamais en prose. Ch
 
 ### Les quatre questions de condition
 
-Elles décident quelles règles entrent. Poser les quatre, même si une réponse paraît évidente : c'est la personne qui répond, pas toi.
+Elles décident quelles règles entrent. Poser les quatre, même si une réponse paraît évidente : c'est la personne qui répond, pas toi. Cinq autres questions de condition, sur la conduite de l'assistant, se posent en phase 3 — même mécanisme, autre sujet.
 
 | Question | Condition | Ce qu'elle fait entrer |
 | :--- | :--- | :--- |
@@ -82,6 +82,22 @@ C'est ce fichier que les scripts lisent : le bilan de démarrage y prend le filt
 
 ## Phase 3 — Quel assistant tu veux
 
+### Les cinq questions de conduite — avant le grill
+
+Comme les quatre de la phase 2, elles décident quelles règles entrent : leurs réponses rejoignent la liste `--vraies` de la phase 4. Les poser une à la fois, avec les mots ci-dessous — chacune décrit les deux régimes, et c'est sur eux que la personne choisit.
+
+| Question à poser, telle quelle | Condition | Vraie si |
+| :--- | :--- | :--- |
+| Quand l'assistant travaille sur tes fichiers, veux-tu qu'il t'annonce chaque changement avant de le faire et qu'il te rende la main aux étapes clés — ou qu'il avance seul et te rende compte à la fin ? | `SUPERVISION` | « qu'il annonce et rende la main » |
+| Quand l'assistant a besoin d'une décision de ta part, préfères-tu qu'il s'arrête et te pose un choix explicite avec ses options — ou qu'il propose au fil du texte et continue ? | `SOLLICITATIONS` | « un choix explicite » |
+| Réponse courte — la conclusion et ce qui attend ta décision, le détail dans les fichiers — ou compte rendu complet du raisonnement dans la réponse ? | `CONCISION` | « réponse courte » |
+| Veux-tu que l'assistant marque explicitement le statut de ce qu'il affirme — vérifié, supposé, à confirmer — et dise sur quoi il a cherché quand il conclut qu'une chose n'existe pas ? Ou préfères-tu la réponse seule ? | `RIGUEUR_AFFICHEE` | « qu'il marque le statut » |
+| Ton code passe-t-il sous les yeux d'autres personnes — revue, pull request, équipe ? | `CODE_RELU` | oui |
+
+Ce que chaque « non » retire est écrit dans `RULES_CATALOG.md`, condition par condition. Deux gardes ne dépendent d'aucune de ces réponses : **le relais de la dette de sécurité au démarrage** reste même quand `SUPERVISION` est fausse — avancer seul n'est pas cesser d'être averti qu'un secret traîne à régénérer —, et **la discipline de varier les motifs d'une recherche** reste même quand `RIGUEUR_AFFICHEE` est fausse — c'est son affichage qui devient optionnel, pas elle.
+
+### Le grill de persona
+
 Invoquer la compétence de grill. Douze rubriques, dont les énoncés génériques sont déjà dans le fichier de règles ; l'entretien remplit le réglage de chacune.
 
 Ne pas expédier cette phase : c'est la seule qui produise quelque chose qui n'existe nulle part ailleurs. Les règles, on peut les relire ; un persona mal réglé se subit sans savoir pourquoi.
@@ -95,10 +111,10 @@ Ne pas expédier cette phase : c'est la seule qui produise quelque chose qui n'e
 Il est livré en **gabarit**, avec les règles conditionnelles entre marqueurs. **L'assemblage ne se fait pas à la main** — un retrait improvisé à chaque installation ne se vérifie pas, et son erreur, règle manquante ou règle sans objet, ne se manifeste par rien.
 
 ```bash
-bash ~/.claudeos/engine/assemble-rules.sh --vraies MULTIDOMAINE,CONFIDENTIEL
+bash ~/.claudeos/engine/assemble-rules.sh --vraies MULTIDOMAINE,CONFIDENTIEL,SUPERVISION,SOLLICITATIONS
 ```
 
-La liste ne contient que les conditions **vraies**, séparées par des virgules, éventuellement vide. Le script :
+La liste ne contient que les conditions **vraies**, séparées par des virgules, éventuellement vide — les quatre questions de la phase 2 **et les cinq de la phase 3** y répondent chacune par sa présence ou son absence ; une réponse non transmise serait tenue pour fausse et retirerait des règles voulues. Le script :
 
 - retire les blocs dont la condition est fausse, et **les marqueurs des blocs conservés** ;
 - retire les compétences devenues sans objet **et leur ligne de déclencheur ensemble** — une ligne de déclencheur sans compétence envoie vers le vide, une compétence hors de la carte de rappel a perdu son déclencheur visible, ce sont les deux moitiés du même défaut ;

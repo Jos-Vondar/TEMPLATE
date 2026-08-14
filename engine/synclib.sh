@@ -58,6 +58,58 @@ claudeos_refused_by_lock() {
 }
 
 # =============================================================================
+# Avertissements de l'autotest — état partagé entre la sauvegarde et le démarrage.
+#
+# MOTIF (2026-08-14) : backup.sh lançait selftest.sh en jetant TOUTE sa sortie
+# (>/dev/null 2>&1) et n'en gardait que le code de retour. Or l'autotest porte des
+# dizaines d'appels à `warn`, et dans le chemin automatique — le hook de fin de
+# session — aucun n'était jamais vu par personne : un avertissement n'existait que si
+# quelqu'un relançait la commande à la main. Reclasser un contrôle de bloquant à
+# avertissement revenait donc à l'éteindre en silence.
+#
+# LE MÉCANISME. La sauvegarde enregistre les lignes ⚠ du dernier passage dans
+# `engine/selftest-warnings.log`, première ligne = la DATE DEPUIS LAQUELLE L'ENSEMBLE
+# EST INCHANGÉ. Les deux canaux existants relaient : la fin de sauvegarde (backup.sh)
+# et le bilan de démarrage (boot-check.sh, bloc ALERTES). ANTI-BRUIT, et c'est le
+# point : le détail ne s'affiche que le jour où l'ensemble change ; ensuite une seule
+# ligne — compte, ancienneté, commande de détail — parce qu'un avertissement répété à
+# l'identique pendant des semaines apprend à ignorer la catégorie entière (doctrine de
+# la compétence controles-et-alarmes). L'ancienneté affichée dit d'elle-même qu'un
+# avertissement traîne ; le traiter fait disparaître la ligne à la sauvegarde suivante.
+# Le fichier est LOCAL, jamais sauvegardé : chez l'auteur par une ligne nommée du
+# verrou, chez un destinataire par le motif `engine/*.log` que l'installeur pose —
+# c'est ce motif qui a décidé du nom. Une seule implémentation pour les deux lecteurs,
+# même règle que claudeos_refused_by_lock : deux copies vieilliraient à deux âges.
+# =============================================================================
+
+# claudeos_selftest_warns_record FICHIER — extrait les ⚠ de la sortie complète de
+# selftest.sh et met l'état à jour. Aucun avertissement = fichier retiré : l'alerte
+# disparaît quand on la traite, jamais avant.
+claudeos_selftest_warns_record() {
+    local etat="$SELF/selftest-warnings.log" nouveaux="" depuis
+    nouveaux="$(grep '⚠' "$1" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)"
+    if [ -z "$nouveaux" ]; then rm -f "$etat"; return 0; fi
+    depuis="$(date '+%Y-%m-%d')"
+    if [ -f "$etat" ] && [ "$nouveaux" = "$(tail -n +2 "$etat")" ]; then
+        depuis="$(head -1 "$etat")"
+    fi
+    { echo "$depuis"; printf '%s\n' "$nouveaux"; } > "$etat"
+    return 0
+}
+
+# claudeos_selftest_warns_bilan — émet « DEPUIS<TAB>COMPTE » puis les lignes ⚠, et
+# rien du tout s'il n'y a aucun avertissement enregistré.
+claudeos_selftest_warns_bilan() {
+    local etat="$SELF/selftest-warnings.log" n
+    [ -f "$etat" ] || return 0
+    n="$(tail -n +2 "$etat" | grep -c . || true)"
+    [ "${n:-0}" -gt 0 ] || return 0
+    printf '%s\t%s\n' "$(head -1 "$etat")" "$n"
+    tail -n +2 "$etat"
+    return 0
+}
+
+# =============================================================================
 # Régime 'memory' — gestion dédiée (extraite de backup.sh / sync.sh). Les deux sens
 # font un travail de SÉCURITÉ différent (pas de duplication) : la sauvegarde garde
 # contre l'écrasement, la restauration snapshot + propage les suppressions. Requiert

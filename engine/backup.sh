@@ -114,16 +114,46 @@ copy_file() {
 }
 
 # --- Selftest plomberie (« fail before you ship ») ---
-if ! bash "$SELF/selftest.sh" >/dev/null 2>&1; then
+# La sortie n'est plus jetée (2026-08-14). Elle l'était (>/dev/null 2>&1), si bien que les
+# avertissements de l'autotest n'atteignaient JAMAIS personne dans le chemin automatique :
+# un contrôle classé « avertit » était de fait éteint. La sortie est capturée, les ⚠
+# enregistrés (synclib.sh, claudeos_selftest_warns_record) puis relayés en fin de
+# sauvegarde ci-dessous et au bilan de démarrage (boot-check.sh). Le refus sur échec, lui,
+# ne change pas d'un caractère : un ko refuse toujours la sauvegarde. Sur refus, les
+# lignes ❌ s'affichent directement — le diagnostic ne se mérite plus.
+_ST_SORTIE="$(mktemp)"
+if ! bash "$SELF/selftest.sh" >"$_ST_SORTIE" 2>&1; then
     if [[ "${FORCE_SELFTEST:-0}" != "1" ]]; then
         echo "[backup] ERREUR : selftest de plomberie en échec — backup refusé." >&2
+        sed -n 's/^[[:space:]]*❌/    ❌/p' "$_ST_SORTIE" | head -5 >&2
         echo "[backup] Diagnostic : bash ~/.claudeos/engine/selftest.sh" >&2
         echo "[backup] Outrepasser : FORCE_SELFTEST=1 bash ~/.claudeos/engine/backup.sh" >&2
+        rm -f "$_ST_SORTIE"
         verdict refus-garde "selftest de plomberie en échec"
         exit 1
     fi
     echo "[backup] WARN : selftest en échec mais override actif — on continue." >&2
 fi
+claudeos_selftest_warns_record "$_ST_SORTIE"
+rm -f "$_ST_SORTIE"
+
+# --- Relais des avertissements de l'autotest, en fin de sauvegarde (2026-08-14) ---
+# Appelé sur les deux chemins de réussite, jamais sur un refus (le refus crie déjà).
+# Anti-bruit : le détail le jour où l'ensemble change, une ligne ensuite — voir synclib.sh.
+annoncer_selftest_warns() {
+    local bilan tete depuis n
+    bilan="$(claudeos_selftest_warns_bilan)" || true
+    [ -n "$bilan" ] || return 0
+    tete="$(printf '%s\n' "$bilan" | head -1)"
+    depuis="${tete%%$'\t'*}"; n="${tete##*$'\t'}"
+    if [ "$depuis" = "$(date '+%Y-%m-%d')" ]; then
+        echo "[backup] ⚠ $n avertissement(s) à l'autotest — ensemble nouveau ou modifié aujourd'hui :"
+        printf '%s\n' "$bilan" | tail -n +2 | sed 's/^/    /'
+    else
+        echo "[backup] ⚠ $n avertissement(s) d'autotest, inchangés depuis $depuis — détail : bash ~/.claudeos/engine/selftest.sh"
+    fi
+    return 0
+}
 
 # --- Régénérer l'index de rappel avant la copie mémoire ---
 bash "$SELF/build-index.sh" >/dev/null || echo "[backup] WARN : échec build-index.sh" >&2
@@ -322,6 +352,7 @@ if [ -n "$REFUSES" ]; then
 fi
 
 if git -C "$ROOT" diff --cached --quiet; then
+    annoncer_selftest_warns
     echo "[backup] Aucun changement à sauvegarder."
     verdict ok "aucun changement à sauvegarder"
     exit 0
@@ -347,5 +378,6 @@ if ! git -C "$ROOT" rev-parse "$TAG" >/dev/null 2>&1; then
         && echo "[backup] Point de restauration : $TAG"
 fi
 
+annoncer_selftest_warns
 echo "[backup] Sauvegarde terminée — $(git -C "$ROOT" log -1 --format='%h %s')"
 verdict ok "sauvegarde poussée — $(git -C "$ROOT" log -1 --format='%h')"
