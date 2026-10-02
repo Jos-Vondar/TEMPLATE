@@ -1,0 +1,149 @@
+# =============================================================================
+# ~/.claude — dépôt SYSTÈME. LISTE NOIRE : tout part, sauf ce qui est nommé ici.
+# Posée le 2026-08-22 (étape 4.2), sur directive de l'utilisateur.
+#
+# RISQUE CONNU, ASSUMÉ : ce dossier est écrit par l'outil, qui y crée des dossiers
+# nouveaux à chaque version. Une liste noire ne connaît que le passé — un dossier
+# imprévu part au dépôt sans que rien ne le dise. La liste blanche fermait ce trou
+# par construction ; l'objection a été faite, entendue, écartée. Deux filets restent :
+#   1. le hook `engine/hooks/pre-commit-alarmes.sh`, qui refuse au commit les
+#      binaires, les secrets et les fichiers de données texte (`.jsonl` compris,
+#      l'extension des transcripts) ;
+#   2. la relecture du `git ls-files` avant chaque push vers un dépôt neuf.
+# Quand un dossier inconnu apparaît, l'ajouter ICI est le geste d'entretien.
+#
+# UN COMMENTAIRE SE MET SUR SA PROPRE LIGNE, jamais en fin de motif : git ne
+# reconnaît le `#` qu'en tête de ligne, et `projects/  # transcripts` est un motif
+# littéral qui ne correspond à rien. Constaté ici le 2026-08-22 — la première
+# version de ce fichier laissait passer 1 175 fichiers, dont les transcripts.
+# =============================================================================
+
+# TOUS LES MOTIFS DE DOSSIER D'OUTIL CI-DESSOUS SONT ANCRES PAR UN `/` DE TETE, et
+# c'est le geste D1 de l'audit du 2026-09-22. Sans lui ils mordaient A TOUTE PROFONDEUR :
+# `tasks/` avalait un futur `domaines/<DOMAINE>/tasks/`, `logs/` un `skills/X/logs/`,
+# et un fichier ignore ne sort JAMAIS en `??` — il serait parti hors sauvegarde en silence.
+# Zero fichier reel touche le jour de la pose. Ce fichier documentait deja ce defaut pour
+# `/plans/` et ne l'avait corrige que pour cinq motifs.
+# RESTENT NON ANCRES, et c'est voulu : `__pycache__/`, `node_modules/`, `.venv/`,
+# `_IGNORE/`, `extracted/` — ceux-la doivent mordre a toute profondeur ; et, plus bas,
+# `.credentials.json` et `settings.local.json`, pour la meme raison.
+
+# --- Volumineux, propre à la machine, ou régénérable ---
+# projects/ : transcripts de session, 84 Mo. La mémoire en est SORTIE (voir memory/).
+/projects/
+# plugins/ : greffons installés, 77 Mo, se réinstallent.
+/plugins/
+/file-history/
+# .sync-backups/ : points de sauvegarde de l'ancienne copie rsync.
+/.sync-backups/
+/cache/
+# backups/ : sauvegardes de l'outil ET points de sauvegarde faits a la main avant
+# une modification de configuration. CES DERNIERS NE SONT SAUVEGARDES NULLE PART :
+# ils n'existent que sur le poste qui les a ecrits. Releve a l'audit du 2026-09-22.
+/backups/
+# Cache MCP écrit par le harnais (mcp-discover-verdicts.json), apparu le 2026-09-22 : runtime, ne voyage pas.
+/state/
+/downloads/
+/paste-cache/
+/shell-snapshots/
+/telemetry/
+/daemon/
+/jobs/
+/sessions/
+/session-env/
+/tasks/
+
+# --- Dossiers connus de l'outil, absents de ce poste aujourd'hui ---
+# Nommés d'avance : en liste noire, ce qui n'est pas nommé part.
+/statsig/
+/todos/
+/ide/
+/logs/
+/debug/
+/local/
+
+# --- État local, jamais partagé ---
+# DEUX MOTIFS NON ANCRÉS, ET C'EST VOULU : un secret ou un réglage local exclu à tort
+# ne coûte rien, le même inclus à tort part au dépôt.
+# .credentials.json : authentification. Ne doit JAMAIS voyager, à aucune profondeur.
+.credentials.json
+# settings.local.json : local par conception, y compris sous un `.claude/` de projet.
+settings.local.json
+# Fichiers d'outil, ANCRÉS le 2026-09-22 (dette reconduite des audits) : tous vivent à la
+# racine, mesuré avant d'ancrer — zéro occurrence plus profonde, donc rien ne bouge.
+/.claudeos.lock
+/.last-cleanup
+/.last-update-result.json
+/mcp-needs-auth-cache.json
+/policy-limits.json
+# policy-limits.json.stamp.json : empreinte locale de la politique d'organisation,
+# écrite par l'outil (apparue le 2026-09-15). Porte un identifiant de poste, ne voyage pas.
+/policy-limits.json.stamp.json
+/remote-settings.json
+/statusline-settings.bak.json
+/history.jsonl
+
+# --- Traces du moteur ---
+engine/*.log
+engine/.derniere-activite
+
+# --- Réceptacle confidentiel et bruit ordinaire ---
+_IGNORE/
+extracted/
+__pycache__/
+node_modules/
+.venv/
+.DS_Store
+*.tmp
+*.swp
+
+# =============================================================================
+# MOTIFS RESTAURÉS LE 2026-08-22, à la bascule du PC pro (palier 4.6).
+#
+# Ils étaient dans l'ancien `SYNC_IGNORE` et ont été perdus à la réécriture en
+# liste noire. Mesuré par comparaison exhaustive des deux listes, pas au hasard :
+# c'est ce qui restait NON SUIVI dans `~/.claude` après le premier checkout, plus
+# ce que l'ancienne liste nommait et que celle-ci ne nomme pas.
+# Tous sont du même genre — état d'outil ou de poste, jamais du contenu :
+#   - trois fichiers du daemon : `daemon/` était nommé, ses trois fichiers frères non ;
+#   - `plans/` et `image-cache/` : dossiers d'outil, régénérables ;
+#   - `stats-cache.json` : cache local ;
+#   - les deux points de retour de `settings.json`, posés par un installateur ;
+#   - `.reprise_*.json` : état de reprise d'un script, propre à la machine.
+#
+# `.vscode/` N'EST PAS ici, et c'est un renversement : l'ancien régime l'excluait
+# (décision du 2026-08-17, « réglage propre à la machine »). L'utilisateur a tranché
+# l'inverse le 2026-08-22 — la feuille de style d'aperçu markdown doit VOYAGER. La
+# duplication (huit exemplaires identiques, même md5) est imposée par l'éditeur :
+# `markdown.styles` n'accepte qu'un chemin relatif au dossier ouvert, donc il faut un
+# exemplaire par dossier ouvert. Ne pas la « dédupliquer » : ça casse le mécanisme.
+# =============================================================================
+# ANCRÉS À LA RACINE le 2026-09-17, geste D5 — MÊME DÉFAUT que `/plans/` en dessous, corrigé avant
+# qu'il coûte. Sans slash de tête, un motif mord à TOUTE PROFONDEUR : un futur `image-cache/` ou
+# `daemon.log` légitime ailleurs dans l'arbre sortirait de la sauvegarde EN SILENCE, un fichier
+# ignoré n'apparaissant pas en `??`. MESURÉ AVANT D'ANCRER : zéro fichier réel concerné aujourd'hui
+# hors racine, donc le geste ne déplace rien — c'est une prévention, pas une correction.
+/daemon.lock
+/daemon.log
+/daemon.status.json
+/image-cache/
+# ANCRÉ À LA RACINE le 2026-09-09, sur constat de l'audit. Sans le slash de tête, le motif
+# mordait à TOUTE PROFONDEUR et avalait `resources/superpowers/plans/` — 8 plans système,
+# 104 Ko, suivis par aucun dépôt depuis leur remontée du 2026-09-08, alors que
+# `carte-complete` déclare ce dossier leur domicile. Et `git status` ne le disait pas :
+# un fichier ignoré ne sort pas en `??`. Le voisin `specs/`, lui, était bien suivi.
+/plans/
+/stats-cache.json
+/settings.json.bak
+/settings.json.avant-*
+/.reprise_*.json
+
+# File d'attente locale de l'outil (brouillons de retour non envoyés), posée le 2026-08-28.
+# Motif : écrite par le harnais, propre à ce poste, sans valeur sur une autre machine — et elle
+# faisait sonner l'alarme « données hors sauvegarde » à chaque clôture. Décision de l'utilisateur,
+# arbitrée le 2026-08-28 : exclure plutôt qu'assumer. Le dossier n'a jamais rien contenu d'autre
+# que des brouillons ; si l'outil y range un jour autre chose, cette ligne l'avalerait en silence.
+feedback/drafts/
+
+# Competences synchronisees depuis claude.ai — elles se retelechargent seules (2026-09-16).
+skills/synced/

@@ -1,0 +1,19 @@
+# Jeu d'essai SANSGIT — sans git (GIT=aucun), donc un seul poste et aucun dépôt de travail ; le
+# reste comme MAX, sauf le proxy. 16 clés d'entretien plus PROXY (engine/config/REPONSES_CLES).
+GIT=aucun
+PREFIXES=
+PREFIXES_CLIENT=
+MULTIPOSTE=non
+CONFIDENTIEL=oui
+LIVRABLE=oui
+MULTIDOMAINE=oui
+BILAN_DEMARRAGE=oui
+SKILLS_OPTION=writing-for-agents,grilling,domain-modeling
+SUPERVISION=oui
+SOLLICITATIONS=oui
+CONCISION=oui
+RIGUEUR_AFFICHEE=oui
+CODE_RELU=oui
+REGLES_A_FROID=oui
+DOCS_SUR_DEMANDE=oui
+PROXY=non

@@ -1,0 +1,19 @@
+# Jeu d'essai MIN — tout à non, un dépôt unique, aucune option, pas de proxy.
+# 16 clés d'entretien plus PROXY (engine/config/REPONSES_CLES).
+GIT=unique
+PREFIXES=
+PREFIXES_CLIENT=
+MULTIPOSTE=non
+CONFIDENTIEL=non
+LIVRABLE=non
+MULTIDOMAINE=non
+BILAN_DEMARRAGE=non
+SKILLS_OPTION=
+SUPERVISION=non
+SOLLICITATIONS=non
+CONCISION=non
+RIGUEUR_AFFICHEE=non
+CODE_RELU=non
+REGLES_A_FROID=non
+DOCS_SUR_DEMANDE=non
+PROXY=non

@@ -1,0 +1,46 @@
+# PERIMETRE_TEMPLATE — ce que le template livre, et pourquoi chaque fichier est identique ou non
+# d'une installation à l'autre (plan complet de templating § 1.6 ; plan V3 § 1.6). Lu par
+# `mesure-personnalisation.py invariant` (garantie 2) et par l'outil d'export de l'atelier, qui
+# copie exactement ce que ce fichier nomme.
+#
+# Une ligne : MOTIF CLASSE. Le motif est un `fnmatch` relatif à la racine du système — `*` y
+# traverse les `/`. Un fichier compte dans la classe de la PREMIÈRE ligne qui le prend : les
+# motifs étroits passent avant les larges.
+#   nature        identique par nature chez chacun : un moteur personnalisé serait un bogue ;
+#   conditionnel  son contenu, ou ce qu'il produit chez l'installateur, dépend d'une réponse ;
+#   manque: MOTIF identique alors qu'il devrait dépendre d'une réponse — le motif est obligatoire.
+# Ce classement se relit à la main avant chaque publication (`d-mesure-perso`).
+
+# Racine
+LICENSE nature
+README.md nature
+.gitignore nature
+reglages/.gitkeep nature
+journal/.gitkeep nature
+memory/.gitkeep nature
+
+# L'agent livré : une procédure par mode, lue telle quelle ; ce qui varie se lit dans REPONSES.
+.claude/agents/* nature
+installateur/* nature
+
+# Le règlement : importé fragment par fragment selon les réponses.
+noyau/regles/* conditionnel
+
+# Les gabarits : copiés une fois, puis remplis ou composés selon les réponses.
+gabarits/* conditionnel
+
+# Les compétences livrées. Trois sont masquées ou non par une réponse (skillOverrides) :
+# livrables par LIVRABLE, rtk-depannage par PROXY, pousser-son-dossier par GIT=aucun.
+skills/livrables/* conditionnel
+skills/rtk-depannage/* conditionnel
+skills/pousser-son-dossier/* conditionnel
+skills/* nature
+
+# Le moteur : lit les réponses à l'appel, ne les porte jamais.
+engine/* nature
+
+resources/DOMAINE_TEMPLATE.md nature
+
+# La vidéo de présentation que le README affiche, régénérée par l'atelier.
+.github/media/* nature
+output-styles/eli5.md nature

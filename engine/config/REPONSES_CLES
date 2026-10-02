@@ -1,0 +1,32 @@
+# REPONSES_CLES — le contrat des réponses de `reglages/REPONSES` : SEULE source de la liste des
+# clés, de leur ordre et de leurs valeurs (plan complet de templating § 1.2, `d-reponses-typees-2`).
+# Écrit le 2026-10-01, A4. Lu par `engine/lib_reponses.py`. L'ordre des lignes est celui des
+# imports du bloc du `CLAUDE.md` (§ 1.3) : le socle, puis un fragment par clé, dans cet ordre.
+#
+# Colonnes, séparées par des espaces : CLE  ORIGINE  TYPE  VALEURS
+#   ORIGINE  entretien — une réponse de l'installateur ; machine — un fait du poste, que l'agent
+#            écrit à la plomberie (PROXY seul). Le test (a) de l'installation inachevée ne compte
+#            que les clés d'entretien (§ 1.5).
+#   TYPE     choix — une valeur parmi VALEURS ; liste — sous-liste à virgules de VALEURS, vide
+#            permise ; libre — liste à virgules sans valeurs imposées, vide permise.
+#   VALEURS  à virgules ; `-` pour une clé libre.
+#
+# Un fragment `noyau/regles/<cle>-<valeur>.md` (clé en minuscules, `_` devenu `-`) n'existe que
+# pour une valeur qui porte des règles. Une clé libre n'en a jamais.
+GIT              entretien  choix  par-domaine,unique,aucun
+PREFIXES         entretien  libre  -
+PREFIXES_CLIENT  entretien  libre  -
+MULTIPOSTE       entretien  choix  oui,non
+CONFIDENTIEL     entretien  choix  oui,non
+LIVRABLE         entretien  choix  oui,non
+MULTIDOMAINE     entretien  choix  oui,non
+BILAN_DEMARRAGE  entretien  choix  oui,non
+SKILLS_OPTION    entretien  liste  writing-for-agents,grilling,domain-modeling
+SUPERVISION      entretien  choix  oui,non
+SOLLICITATIONS   entretien  choix  oui,non
+CONCISION        entretien  choix  oui,non
+RIGUEUR_AFFICHEE entretien  choix  oui,non
+CODE_RELU        entretien  choix  oui,non
+REGLES_A_FROID   entretien  choix  oui,non
+DOCS_SUR_DEMANDE entretien  choix  oui,non
+PROXY            machine    choix  oui,non

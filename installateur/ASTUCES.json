@@ -1,0 +1,28 @@
+{
+  "tips": [
+    {"id": "claudeos.cloture", "text": "« On arrête » clôture la séance : l'état s'écrit au journal, les contrôles tournent, puis la sauvegarde. Il n'y en a pas d'autre.", "cooldownSessions": 3, "priority": 5},
+    {"id": "claudeos.sauvegarde-cloture-seule", "text": "Fermer le terminal ne sauvegarde rien : seule la clôture de la session principale sauvegarde.", "cooldownSessions": 5, "priority": 4},
+    {"id": "claudeos.reprise-au-fil", "text": "Une décision prise en séance s'écrit au journal du niveau sur-le-champ : demain, la session neuve ne lira que lui.", "cooldownSessions": 4, "priority": 4},
+    {"id": "claudeos.session-par-projet", "text": "Un projet, une session : bash ~/.claude/engine/claudeos-session.sh <projet>. La clôture reste à la session principale.", "cooldownSessions": 5, "priority": 3},
+    {"id": "claudeos.avant-compact", "text": "Avant /compact, vérifie que l'état du travail est écrit au journal : le résumé perd des détails, le journal non.", "cooldownSessions": 5, "priority": 3},
+    {"id": "claudeos.apres-compact", "text": "Après un compactage, l'assistant relit l'ETAT.md du niveau. S'il repart de mémoire, demande-le-lui.", "cooldownSessions": 8, "priority": 1},
+    {"id": "claudeos.etat-add", "text": "Un fait, une décision, un dû : python3 ~/.claude/engine/etat.py add --niveau <dossier> --type … ; ETAT.md ne s'édite jamais à la main.", "cooldownSessions": 6, "priority": 2},
+    {"id": "claudeos.etat-projette", "text": "ETAT.md est une projection : python3 ~/.claude/engine/etat.py projette --niveau <dossier> le réécrit depuis le journal.", "cooldownSessions": 8, "priority": 1},
+    {"id": "claudeos.etat-fils", "text": "Ce qui reste à faire, tous niveaux, par ancienneté : python3 ~/.claude/engine/etat.py fils --tous.", "cooldownSessions": 6, "priority": 2},
+    {"id": "claudeos.ignore", "text": "Un document qui ne doit pas sortir du poste va dans le _IGNORE/ à la racine de son projet, hors sauvegarde ; y supprimer est définitif.", "cooldownSessions": 8, "priority": 2},
+    {"id": "claudeos.os-audit", "text": "Une fois par mois, « os audit » : la passe relit le système et promeut tes règles candidates.", "cooldownSessions": 15, "priority": 1},
+    {"id": "claudeos.rejouer-entretien", "text": "Ta situation change — une deuxième machine, un premier client, un premier livrable ? Rejoue l'entretien : /claudeos-onboarding.", "cooldownSessions": 20, "priority": 0},
+    {"id": "claudeos.mes-regles", "text": "Une règle à toi va dans « Mes règles » de ton CLAUDE.md, hors du bloc d'imports : aucun script ne la réécrit.", "cooldownSessions": 12, "priority": 1},
+    {"id": "claudeos.bloc-imports", "text": "Le bloc d'imports du CLAUDE.md suit tes réponses : python3 ~/.claude/engine/appliquer-reponses.py l'écrit, jamais la main.", "cooldownSessions": 15, "priority": 0},
+    {"id": "claudeos.reponse-appliquee", "text": "Une réponse changée ne vaut qu'appliquée : appliquer-reponses.py, puis skills-amont.sh, puis leurs --verifier.", "cooldownSessions": 15, "priority": 0},
+    {"id": "claudeos.irreversible", "text": "Ce qui sort du poste ou détruit se confirme avant : envoi à un tiers, suppression, écriture dans un service externe.", "cooldownSessions": 10, "priority": 2},
+    {"id": "claudeos.sous-agent", "text": "Le rapport d'un sous-agent se recontrôle avant de dire une chose vérifiée : un agent peut affirmer un contrôle qu'il n'a pas fait.", "cooldownSessions": 10, "priority": 1},
+    {"id": "claudeos.bilan-proposition", "text": "Le bilan de démarrage propose le travail du jour : une proposition, pas un ordre. Tu tranches.", "cooldownSessions": 12, "priority": 0},
+    {"id": "claudeos.inachevee", "text": "« INSTALLATION INACHEVÉE » au démarrage nomme ce qui manque : réponses, marques, sauvegarde ou clôture.", "cooldownSessions": 6, "priority": 3},
+    {"id": "claudeos.nouveau-projet", "text": "Un projet de plus dans un domaine : « nouveau projet ». Un domaine entier : « nouveau domaine ».", "cooldownSessions": 12, "priority": 1},
+    {"id": "claudeos.pousser-n-est-pas-clore", "text": "Avec GitHub, une session de projet pousse son dossier ; pousser n'est pas clôturer, la clôture reste à la principale.", "cooldownSessions": 12, "priority": 1},
+    {"id": "claudeos.mise-a-jour", "text": "Une version neuve du template : cd ~/.claude && claude --permission-mode auto --agent claudeos-installateur, puis « mettre à jour ».", "cooldownSessions": 30, "priority": -1},
+    {"id": "claudeos.secret", "text": "Un secret ne s'écrit jamais dans un fichier suivi : le crochet de commit le refuse. Où le ranger : la compétence secrets-detail.", "cooldownSessions": 15, "priority": 1},
+    {"id": "claudeos.recherche-vide", "text": "Une recherche vide ne prouve rien tant que le motif n'a pas varié et que le périmètre n'est pas nommé.", "cooldownSessions": 15, "priority": 0}
+  ]
+}

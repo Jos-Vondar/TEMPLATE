@@ -1,0 +1,69 @@
+# =============================================================================
+# LISTE NOIRE DE RÉFÉRENCE — dépôts de travail professionnels
+#
+# SOURCE UNIQUE. Chaque dépôt dont le nom commence par un préfixe de `PREFIXES_CLIENT`
+# (`reglages/REPONSES`) en porte une copie VERSIONNÉE, à sa racine, sous le nom
+# `.gitignore`. Le contrôle 11 du crochet `pre-commit` refuse le commit (code 25) si la
+# copie diffère de ce fichier, ou si elle manque. En `GIT=unique`, ses lignes vont dans
+# le `.git/info/exclude` de `~/.claude`, et le même contrôle les exige.
+#
+# POURQUOI UNE COPIE PLUTÔT QU'UN `core.excludesFile` : celui-ci n'est pas versionné, il
+# vit dans la config git d'une machine. Sur un poste où l'installation n'a pas tourné, la
+# liste noire n'existerait pas, et un `git add -A` embarquerait le `_IGNORE/` — les
+# documents client confidentiels — puis les pousserait au dépôt distant. Une copie
+# versionnée arrive AVEC le clone : ce trou n'existe pas. Le prix, une copie par dépôt qui
+# peut diverger, est payé par le contrôle 11.
+#
+# Un dépôt de travail PERSONNEL — préfixe hors de `PREFIXES_CLIENT` — est hors périmètre :
+# il porte son propre `.gitignore`, libre de diverger, et le contrôle 11 ne le regarde pas.
+#
+# RÉGIME LISTE NOIRE : ce qui suit ne part jamais au dépôt distant privé ; TOUT LE RESTE
+# PART, documents bureautiques compris. Un motif perdu à une réécriture ne se voit pas :
+# on ne retire une ligne qu'en sachant ce qu'elle gardait.
+# =============================================================================
+
+# --- Confidentiel client : réceptacle dédié, à toute profondeur (règle du réceptacle).
+_IGNORE/
+
+# --- Exports décompressés d'un outil : artefact régénérable depuis l'export d'origine.
+extracted/
+
+# --- Bruit d'outil : ce n'est pas du contenu.
+__pycache__/
+node_modules/
+.venv/
+.DS_Store
+*.tmp
+*.swp
+
+# --- Archives et états de script.
+#   - `*.zip` : exports et archives. Lourds, binaires, et ré-exportables depuis l'outil qui
+#     les produit. L'état courant d'un projet se lit dans son `ETAT.md`, jamais dans une
+#     archive gelée au dépôt. Sans ce motif, le crochet refuserait chaque ajout (binaire,
+#     code 12) et l'alarme s'userait à être levée à la main.
+#   - `.reprise_*.json` : état de reprise d'un script, régénéré à chaque exécution, propre
+#     à la machine (donnée texte, code 15, sans ce motif).
+# `.vscode/` N'EST PAS ici, volontairement : une feuille de style d'aperçu markdown doit
+# pouvoir voyager avec le dépôt, et l'éditeur impose un chemin relatif au dossier ouvert.
+*.zip
+.reprise_*.json
+
+# Marqueur de provenance NTFS écrit par Windows à côté de tout fichier téléchargé.
+*:Zone.Identifier
+
+# --- Raccourcis vers le `_IGNORE/` du projet, posés dans les dossiers d'app.
+# Motif SANS slash final, et c'est le point : un lien symbolique est un FICHIER pour git, donc
+# `_IGNORE/` ne l'attrape pas — un lien nommé `_IGNORE` sortirait en `??`.
+# Le nom est distinct de `_IGNORE` exprès : les deux contrôles de réceptacle de `weekly-check.sh`
+# cherchent ce nom-là, et un lien qui le porterait leur ferait voir un réceptacle inexistant.
+_ign
+
+# Configuration locale d'un coffre de notes (dossier `.obsidian/`) : `workspace.json` y
+# enregistre les fichiers ouverts, propre au poste.
+.obsidian/
+
+# Fichiers de verrou Excel et Word : Office en pose un à côté de tout classeur OUVERT, nommé
+# `~$` + le nom du fichier. Il disparaît à la fermeture, mais il sort en `??` tant que le
+# document est ouvert — et un `git add -A` passé pendant ce temps le committe. Motif sans
+# slash : c'est un fichier, pas un dossier.
+~$*

@@ -1,0 +1,15 @@
+{
+  "spinnerTipsOverride": {
+    "label": "ClaudeOS",
+    "tipsFile": "~/claudeos-amorce/installateur/ASTUCES.json",
+    "excludeDefault": true
+  },
+  "permissions": {
+    "allow": [
+      "Bash(python3 engine/*)",
+      "Bash(bash engine/*)",
+      "Bash(python3 ~/.claude/engine/*)",
+      "Bash(bash ~/.claude/engine/*)"
+    ]
+  }
+}

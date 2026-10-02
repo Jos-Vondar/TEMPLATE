@@ -1,0 +1,26 @@
+# gitattributes-journal — le pilote de fusion des journaux d'événements.
+# Posé le 2026-09-08, geste 2.3 du plan `plans-systeme/2026-09-09-plan-implementation-unifie.md`.
+# `install-poste.sh` l'inscrit en `core.attributesFile` sur chaque dépôt de `claudeos_repos`.
+#
+# ÉCART DE NOM assumé : le plan l'appelle `gitattributes-documents`, par symétrie avec son voisin
+# `gitignore-documents`. Ce suffixe est un héritage du monodépôt `DOCUMENTS`, qui n'existe plus —
+# et ce fichier-ci s'applique à TOUS les dépôts, le système compris, qui porte lui aussi un
+# journal. Un nom qui promet un périmètre qu'il n'a pas coûte plus que la symétrie.
+#
+# CE QUE `union` FAIT, et il faut le savoir avant de s'en servir : sur un conflit, il garde les
+# lignes DES DEUX CÔTÉS au lieu de s'arrêter. Sur un journal append-only c'est le comportement
+# voulu — deux postes qui ajoutent chacun un événement obtiennent les deux. Mais si les deux
+# côtés ont écrit une ligne DIFFÉRENTE au même endroit, `union` fabrique un DOUBLON et git
+# annonce la fusion comme un SUCCÈS (mesuré le 2026-09-08 sur deux clones). C'est pourquoi il ne
+# voyage jamais seul : le contrôle 22 du crochet et `etat.py check` après chaque `pull` cherchent
+# ce doublon par son `id`.
+#
+# POURQUOI UN FICHIER DE CONFIGURATION ICI, alors que la liste noire est un `.gitignore` SUIVI
+# (geste 1.5) : parce que le mode de panne est inversé. Un `core.excludesFile` absent laisse
+# partir du confidentiel SANS RIEN DIRE. Un `core.attributesFile` absent rend au contraire un
+# conflit de fusion ORDINAIRE — visible, bruyant, arrêtant le `pull`. Une garde dont l'absence
+# crie peut vivre hors du dépôt ; une garde dont l'absence est muette, non.
+#
+# `union` est un pilote INTÉGRÉ à git : rien à déclarer, aucun script à écrire.
+
+journal/*.jsonl merge=union

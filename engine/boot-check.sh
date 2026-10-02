@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # BOOT CHECK — ClaudeOS (hook SessionStart)
-# LECTURE SEULE : détecte les écarts, n'agit jamais (pas de pull/install/écriture).
+# LECTURE SEULE (D6) : détecte les écarts, n'agit jamais (pas de pull/install/écriture).
 # L'utilisateur décide.
 # UN SEUL MODE : émet le JSON `additionalContext` attendu par le hook SessionStart, donc
 # injecté dans le contexte du modèle et invisible à l'écran. C'est le MODÈLE qui rend le
@@ -11,7 +11,7 @@
 # BILAN_DEMARRAGE, bloc dédié plus bas) ; la dette de sécurité sort dans tous les cas.
 #
 # LA BANNIÈRE SHELL A ÉTÉ RETIRÉE le 2026-08-09. Un mode `--human` dessinait un bandeau
-# coloré dans le terminal ; son unique appelant était le wrapper `boot-wrapper.sh`, qui a cessé de
+# coloré dans le terminal ; son unique appelant était le wrapper `claudeos-boot.sh`, qui a cessé de
 # l'appeler pour injecter le prompt « tu es à jour ? » à la place — un hook de démarrage ne
 # peut qu'ajouter du contexte, il ne peut pas faire parler l'assistant en premier. La branche
 # n'avait donc plus d'appelant, et personne ne l'aurait vu : du code mort qui ne casse jamais.
@@ -33,53 +33,75 @@ if [ "$#" -gt 0 ]; then
 fi
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/synclib.sh"
 
 OUT=""
 
+# Paliers d'ancienneté, en jours : < T_WARN vert · T_WARN..T_CRIT jaune · > T_CRIT rouge.
+# REMONTÉS ICI le 2026-08-22, avant leur première utilisation. Ils vivaient au milieu du
+# fichier, après deux blocs qui comparaient à un `10` écrit en dur — donc TROIS seuils pour
+# une seule grandeur, dont deux invisibles. `set -u` interdit de simplement déplacer l'usage :
+# c'est la définition qui monte.
+T_WARN=7; T_CRIT=14
+
 # --- Flags de gravité, consommés par le tableau d'état (build_dashboard) ---
 BEHIND=0; DIRTY=0; PROP_N=0; DISTILL_DUE=0; SEC_N=0
-GIT_OK=1; BACKUP_ERR=0; SYNC_INCOMPLETE=0; JDATE=""; JDAYS=-1
-SKILLS_MISSING=""; IDAYS=-1
+GIT_OK=1; BACKUP_ERR=0; JDATE=""; JDAYS=-1
+IDAYS=-1
 CRUISE_D=-1
 
-# --- Écart git du repo de config ---
-if [ -d "$ROOT/.git" ]; then
-    # Fetch réseau INCONDITIONNEL depuis le 2026-08-09. Il était sauté dans le mode bannière,
-    # pour un bandeau instantané, au prix d'un retard évalué sur la dernière ref connue. Ce
-    # mode n'existe plus : le seul appelant restant est le déclencheur, où la mesure doit être
-    # juste — c'est elle qui décide si le poste est annoncé à jour ou en retard.
-    git -C "$ROOT" fetch --quiet 2>/dev/null
-    BEHIND=$(git -C "$ROOT" rev-list --count HEAD..@{u} 2>/dev/null || echo 0)
-    DIRTY=$(git -C "$ROOT" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-    [ "$BEHIND" -gt 0 ] && OUT="${OUT}⚠️ Config en retard de ${BEHIND} commit(s) — lance: bash ~/.claudeos/engine/sync.sh"$'\n'
-    [ "$DIRTY" -gt 0 ] && OUT="${OUT}• ${DIRTY} fichier(s) non commités dans le repo config"$'\n'
-    # #25 : croissance non bornée du dépôt (format lourd échappant à SYNC_IGNORE) ?
-    PACK_KB=$(du -sk "$ROOT/.git" 2>/dev/null | cut -f1)
-    [ "${PACK_KB:-0}" -gt 204800 ] && OUT="${OUT}⚠️ Dépôt config .git > 200 Mo — un format lourd échappe probablement à SYNC_IGNORE"$'\n'
+# --- Écart git des DEUX dépôts (réécrit le 2026-08-22, étape 4.5) ---
+# Le système et les documents vivent chacun dans leur dépôt ; il n'y a plus de copie
+# rsync ni de « poste en retard » au sens du manifeste. « En retard » veut maintenant
+# dire : des commits distants que ce poste n'a pas encore tirés.
+BEHIND=0; DIRTY=0
+# MULTIPOSTE=non (`reglages/REPONSES`) : un seul poste écrit ces dépôts, la sonde de retard n'a rien
+# à trouver et coûte un `fetch` réseau par dépôt à chaque démarrage. Elle se saute, et le tableau le
+# dit (plan V3, lot 5, geste 3 ; A6, 2026-10-01). Clé absente : elle tourne, poste non réglé.
+_SONDE_RETARD=1
+[ "$(claudeos_reponse MULTIPOSTE 2>/dev/null)" = "non" ] && _SONDE_RETARD=0
+_ecart() {
+    local repo="$1" nom="$2" behind=0 dirty
+    [ -d "$repo/.git" ] || return 0
+    [ -n "$(git -C "$repo" remote 2>/dev/null)" ] || return 0
+    if [ "$_SONDE_RETARD" = 1 ]; then
+        git -C "$repo" fetch --quiet 2>/dev/null
+        behind=$(git -C "$repo" rev-list --count HEAD..@{u} 2>/dev/null || echo 0)
+    fi
+    dirty=$(git -C "$repo" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+    BEHIND=$(( BEHIND + behind )); DIRTY=$(( DIRTY + dirty ))
+    [ "$behind" -gt 0 ] && OUT="${OUT}⚠️ Dépôt ${nom} en retard de ${behind} commit(s) — lance: git -C ${repo/#$HOME/$CLAUDEOS_TILDE} pull --rebase"$'\n'
+    [ "$dirty" -gt 0 ] && OUT="${OUT}• ${dirty} fichier(s) non commité(s) dans le dépôt ${nom}"$'\n'
+    return 0
+}
+# Un dépôt par client depuis le 2026-09-08 (geste 1.10) : la liste vient de `claudeos_repos`,
+# elle n'est plus écrite en dur. Étiquette : « système » pour `~/.claude`, le chemin relatif au
+# dossier personnel pour les autres — « ~/<DÉPÔT_A> » aurait nommé un dossier inexistant.
+while IFS= read -r _d; do
+    [ -n "$_d" ] || continue
+    if [ "$_d" = "$HOME/.claude" ]; then _ecart "$_d" "système"
+    else _ecart "$_d" "${_d/#$HOME/$CLAUDEOS_TILDE}"; fi
+done < <(claudeos_repos)
+# Poste en retard = fichiers vivants périmés. Les signaux actionnables composés plus bas
+# sont lus sur ces fichiers, donc possiblement déjà traités sur l'autre poste — les marquer
+# non fiables SANS les taire. La dette de sécurité n'est pas atténuée : elle sort toujours.
+[ "$BEHIND" -gt 0 ] && OUT="${OUT}   ↳ NON synchronisé : les signaux actionnables ci-dessous peuvent déjà être traités ailleurs — à revérifier APRÈS synchro, ne pas exécuter tels quels (la dette de sécurité, elle, vaut dans tous les cas)."$'\n'
 
-    # --- Compteur de convergence (2026-08-09, le document de conception). LECTURE SEULE. ---
-    # Croisière = 28 jours consécutifs sans chantier moteur ni chantier de règles. Le compteur
-    # rend la condition d'arrêt VISIBLE : sans lui, « le système est-il fini ? » ne se pose
-    # jamais, et l'amélioration indéfinie est ce qui a produit l'usine à gaz du 2026-07-27.
-    # Périmètre du chantier : `engine/` et `system/CLAUDE.md` — le moteur et le règlement.
-    # `--invert-grep` écarte les réparations : un enregistrement dont le message commence par
-    # `incident:` ne remet pas le compteur à zéro, c'est ce qui distingue un système qui se
-    # répare d'un système qu'on refait. La convention est écrite DANS le message du compteur,
-    # pas seulement ici : personne ne vient lire un script pour savoir comment nommer un commit.
-    # `MACHINE_TODO.md` est EXCLU du périmètre, constaté en exerçant le compteur le jour de son
-    # écriture : il vit sous `engine/` et `machine-todo.sh` l'enregistre tout seul, si bien que
-    # la moindre consigne inter-machines remettait le compteur à zéro. Une file d'attente n'est
-    # pas un chantier — sans cette exclusion, le compteur n'aurait jamais dépassé quelques jours
-    # et aurait fini par ne rien mesurer du tout.
+# --- Compteur de convergence. LECTURE SEULE. ---
+# Croisière = 28 jours consécutifs sans chantier moteur ni chantier de règles. Le compteur
+# rend la condition d'arrêt VISIBLE : sans lui, « le système est-il fini ? » ne se pose
+# jamais, et l'amélioration indéfinie est ce qui a produit l'usine à gaz du 2026-07-27.
+# Périmètre : `engine/` et `CLAUDE.md` du dépôt système. `--invert-grep` écarte les
+# réparations : un message commençant par `incident:` ne remet pas le compteur à zéro,
+# c'est ce qui distingue un système qui se répare d'un système qu'on refait.
+if [ -d "$ROOT/.git" ]; then
     CRUISE_TS=$(git -C "$ROOT" log -1 --format='%ct' --invert-grep --regexp-ignore-case \
-        --grep='^incident:' -- engine system/CLAUDE.md ':!engine/config/MACHINE_TODO.md' 2>/dev/null)
+        --grep='^incident:' -- engine CLAUDE.md 2>/dev/null)
     if [ -n "${CRUISE_TS:-}" ] && [ "$CRUISE_TS" -gt 0 ] 2>/dev/null; then
         CRUISE_D=$(( ( $(date +%s) - CRUISE_TS ) / 86400 ))
     fi
 fi
 
-# --- Flag propositions d'apprentissage ---
+# --- Flag propositions d'apprentissage (D5) ---
 LP="$MEM/LEARNING_PROPOSALS.md"
 if [ -f "$LP" ]; then
     # Un titre BARRÉ (`## ~~`) est une proposition déjà traitée, conservée pour que la
@@ -87,12 +109,15 @@ if [ -f "$LP" ]; then
     # le compteur annonçait 2 en attente là où une seule l'était, l'autre étant barrée depuis
     # le 2026-08-10. Une alarme se construit sur l'état courant, jamais sur la trace d'un état
     # passé : compter un titre barré, c'est retrouver un souvenir. Le motif `awk '/^## /` reste
-    # littéral en tête, car `selftest.sh` § 20 le cherche au caractère près.
+    # littéral en tête. La contrainte « cherché au caractère près par le contrôle 20 » est TOMBÉE le
+    # 2026-08-22 : ce contrôle de câblage est mort avec la copie. Le littéral reste parce qu'il est
+    # lisible, pas parce qu'un garde l'exige.
     PROP_N=$(awk '/^## /{ if ($0 !~ /^## *~~/) n++ } END{print n+0}' "$LP" 2>/dev/null || echo 0)   # #8 : toujours numérique, toujours rc 0
-    [ "$PROP_N" -gt 0 ] && OUT="${OUT}🧠 ${PROP_N} proposition(s) d'apprentissage en attente de validation ($LP)"$'\n'
+    # SIGNAL 🧠 RETIRÉ le 2026-09-08 (geste 2.4) : `LEARNING_PROPOSALS.md` est gelé, ses
+    # candidates sont des `du` du journal. `PROP_N` reste calculé, il n'alerte plus.
 fi
 
-# --- Dette de sécurité : secrets compromis / à régénérer (jamais de valeur — CLAUDE.md §4) ---
+# --- Dette de sécurité : secrets compromis / à régénérer (jamais de valeur — compétence secrets-detail) ---
 SECDEBT="$MEM/SECURITY_DEBT.md"
 if [ -f "$SECDEBT" ]; then
     SEC_N=$(awk '/^## /{n++} END{print n+0}' "$SECDEBT" 2>/dev/null || echo 0)   # #8 : awk robuste
@@ -118,7 +143,13 @@ if [ -f "$REMINDERS" ]; then
     while IFS= read -r rline || [ -n "$rline" ]; do
         rdate=$(printf '%s' "$rline" | grep -oE '^- [0-9]{4}-[0-9]{2}-[0-9]{2}' | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
         [ -z "$rdate" ] && continue
-        rts=$(date -d "$rdate" +%s 2>/dev/null || echo 0)
+        # PORTABILITÉ 2026-09-12 : voir claudeos_epoch_of_date dans config.sh. Un échec de
+        # conversion se DIT désormais, au lieu de rendre 0 et d'escamoter le rappel en silence.
+        rts=$(claudeos_epoch_of_date "$rdate" || true)
+        if [ -z "$rts" ]; then
+            OUT="${OUT}⚠️ Rappel du ${rdate} NON ÉVALUÉ — date illisible par \`date -d\` comme par python3. Le rappel existe et n'est PAS affiché ci-dessus."$'\n'
+            continue
+        fi
         if [ "$rts" -gt 0 ] && [ "$rts" -le "$NOW_TS" ]; then
             rtext=$(printf '%s' "$rline" | sed -E 's/^- [0-9]{4}-[0-9]{2}-[0-9]{2} *\| *//')
             rlate=$(( (NOW_TS - rts) / 86400 ))
@@ -133,16 +164,15 @@ if [ -f "$REMINDERS" ]; then
     fi
 fi
 
-# --- Distillation hebdo due ? (déclenchée à l'ouverture de session) ---
-# Marqueur = semaine ISO de la dernière distillation. Si la semaine courante diffère,
-# la distillation est due. LECTURE SEULE ici : c'est l'assistant qui la lance et met à
-# jour le marqueur (cf. CLAUDE.md §6 / le document de conception).
-WEEK=$(date +%G-W%V)
-MARKER="$MEM/.last_distillation"
-if [ "$(cat "$MARKER" 2>/dev/null || echo "")" != "$WEEK" ]; then
-    DISTILL_DUE=1
-    OUT="${OUT}🧪 Distillation d'apprentissage DUE (semaine ${WEEK}) — relire 7j de HANDOFF/JOURNAL/feedback, proposer des promotions, puis écrire ${WEEK} dans ${MARKER}."$'\n'
-fi
+# --- LE RITUEL DE DISTILLATION EST MORT le 2026-09-08, geste 2.4 (décision D-E du plan).
+# Ce qu'il y avait ici : un bloc 🧪 qui lisait `memory/.last_distillation` et réclamait une
+# distillation passé sept jours. Il sort avec son marqueur, et le marqueur est SUPPRIMÉ.
+# LE MOTIF, et il n'est pas la simplification : la distillation existait pour faire remonter
+# ce que les fichiers d'état laissaient tomber. Avec un journal append-only il n'y a plus rien
+# à faire remonter — une candidate est un `du` ouvert du niveau, visible dans « Ce qui reste »
+# jusqu'à ce qu'on la tranche. Un rappel périodique pour relire un fichier qui ne perd plus
+# rien est un rituel qui coûte sans rendre.
+# `DISTILL_DUE` reste initialisé à 0 en tête de ce script : le tableau d'état le lisait.
 
 # --- Audit du système dû ? (cadence mensuelle, lecture seule) ---
 # La plomberie est testée à chaque sauvegarde ; le CONTENU (la carte dit-elle encore vrai ?)
@@ -152,212 +182,206 @@ fi
 # hebdomadaire (avertissements du filet, trois sondages dans la carte, registre des ratés,
 # fils reconduits — voir la compétence `session`), et cet audit COMPLET en éventail, cher, dont le
 # Depuis le 2026-07-27 l'audit est HEBDOMADAIRE : il a reçu tout ce qui a quitté la
-# clôture (hygiène, retombée documentaire, distillation, ratés de routage), donc son seuil
+# clôture (hygiène, distillation, ratés de routage, contrôles de documents), donc son seuil
 # passe de 90 à 7 jours.
 AUDIT_DIR="$HOME/.claude/audits"
-AUDIT_LAST=$(ls -1 "$AUDIT_DIR"/os-audit-*.md 2>/dev/null | sed 's/.*os-audit-//;s/\.md$//' | sort | tail -1)
+# LA DATE SEULE, JAMAIS LE SUFFIXE DE POSTE — corrigé le 2026-09-22. Un rapport peut s'appeler
+# `os-audit-2026-09-17-mac.md` ; l'ancien découpage rendait `2026-09-17-mac`, que le tri plaçait
+# EN DERNIER et qu'aucune conversion de date ne sait lire. `AUDIT_DAYS` tombait donc à -1 et le
+# démarrage annonçait « ancienneté NON MESURÉE » — l'alarme d'audit était aveugle depuis le
+# 2026-09-17, et elle l'aurait été de nouveau au prochain audit nommé de la même façon.
+# Ce `sed` ne retient que les dix caractères de la date ISO et IGNORE une ligne qui n'en porte
+# pas : mieux vaut ne pas voir un rapport mal nommé que rendre une ancienneté fausse.
+AUDIT_LAST=$(ls -1 "$AUDIT_DIR"/os-audit-*.md 2>/dev/null \
+    | sed -nE 's/.*os-audit-([0-9]{4}-[0-9]{2}-[0-9]{2}).*\.md$/\1/p' | sort | tail -1)
 if [ -z "$AUDIT_LAST" ]; then
     OUT="${OUT}🔍 Audit du système jamais lancé — « os audit » pour vérifier que la carte dit encore vrai."$'\n'
 else
-    AUDIT_DAYS=$(( ( $(date +%s) - $(date -d "$AUDIT_LAST" +%s 2>/dev/null || date +%s) ) / 86400 ))
-    if [ "$AUDIT_DAYS" -gt 7 ]; then
-        OUT="${OUT}🔍 Audit du système DÛ (dernier : ${AUDIT_LAST}, il y a ${AUDIT_DAYS} j) — « os audit »."$'\n'
+    # PORTABILITÉ 2026-09-12 : idem. L'ancien repli `|| date +%s` rendait 0 jour, donc l'audit
+    # n'était JAMAIS signalé dû sur un poste sans `date -d`.
+    _audit_ts=$(claudeos_epoch_of_date "$AUDIT_LAST" || true)
+    if [ -z "$_audit_ts" ]; then
+        AUDIT_DAYS=-1
+        OUT="${OUT}⚠️ Ancienneté de l'audit NON MESURÉE — date « ${AUDIT_LAST} » illisible. Ne pas lire l'absence d'alerte d'audit comme un audit récent."$'\n'
+    else
+        AUDIT_DAYS=$(( ( $(date +%s) - _audit_ts ) / 86400 ))
+    fi
+    # SEUIL PORTÉ DE 7 À 30 JOURS le 2026-09-08, décision D-K du plan. Motif : à sept jours le
+    # rappel était dû presque en permanence, donc il ne signalait plus rien — un rappel toujours
+    # allumé est un rappel éteint. Le message dit l'ANCIENNETÉ dans son unité, pas « en retard ».
+    if [ "$AUDIT_DAYS" -gt 30 ]; then
+        OUT="${OUT}🔍 Audit du système non lancé depuis ${AUDIT_DAYS} j (dernier : ${AUDIT_LAST}) — « os audit »."$'\n'
     fi
 fi
 
 # --- Auto-diagnostic de la plomberie (« fail loud ») ---
-# Le second brain doit signaler quand SA PROPRE machinerie casse, plutôt que d'échouer en silence.
+# Le second brain doit signaler quand SA PROPRE machinerie casse, plutôt que d'échouer en
+# silence. RÉÉCRIT le 2026-08-22 (étape 4.5) : la copie rsync est morte, et avec elle le
+# journal de sauvegarde, le verrou de sync incomplet, la dérive dépôt↔live et le rapport
+# des fichiers refusés par la liste blanche. Ce que ces sondes disaient se lit maintenant
+# directement dans git, qui est la source et non une trace laissée par un script.
 
-# Dépendance dure : git (sinon la détection d'écart ci-dessus est muette)
-if ! command -v git >/dev/null 2>&1; then
+# Dépendance dure : git. Sans lui, tout ce qui précède est muet. EN RÉGIME GITHUB SEULEMENT : sans
+# git (`GIT=aucun`), son absence est le choix de l'installateur, pas une panne à signaler.
+if [ "$(claudeos_regime)" != aucun ] && ! command -v git >/dev/null 2>&1; then
     GIT_OK=0
-    OUT="${OUT}⚠️ git introuvable — détection d'écart de config désactivée"$'\n'
+    OUT="${OUT}⚠️ git introuvable — la sauvegarde et la détection d'écart sont désactivées"$'\n'
 fi
 
-# Dépendance dure : rsync (sinon backup.sh refuse de tourner). Détectable => sondé
-# ici, jamais porté dans le changelog manuel.
-if ! command -v rsync >/dev/null 2>&1; then
-    OUT="${OUT}⚠️ rsync introuvable — dépendance dure du backup : installe-le (sudo apt-get install -y rsync)"$'\n'
-fi
-
-# Dernier backup auto en échec / interrompu / muet ? (le hook SessionEnd log ici, personne ne le lit)
-# Trois cas, pas seulement "ERREUR" : (a) refus explicite, (b) exécution ni réussie ni en
-# erreur nette = interrompue (timeout SessionEnd tué en plein push), (c) log périmé = hook muet.
-#
-# Le verdict porte sur la DERNIÈRE opération enregistrée, jamais sur la présence du mot
-# "ERREUR" dans une fenêtre de fin de fichier (corrigé le 2026-07-27). Motif, constaté sur
-# pièce : une erreur de verrou suivie de quatre sauvegardes propres alarmait encore, parce
-# qu'elle tenait la cinquième ligne depuis la fin et que le test lisait `tail -5`. Une alarme
-# qui survit à sa cause devient du bruit qu'on apprend à ignorer, et elle apprend à ignorer
-# aussi les vraies. On repère donc la dernière ligne de VERDICT (ERREUR/ALARME contre
-# "Sauvegarde terminée"/"Aucun changement"), les lignes de conseil qui suivent un échec ne
-# portant aucun verdict ; puis on vérifie qu'aucune ligne de progression n'apparaît APRÈS
-# elle, ce qui signerait un passage suivant jamais arrivé à son terme.
-LOG="$SELF/backup-hook.log"
-if [ -f "$LOG" ]; then
-    LOG_AGE=$(( ( $(date +%s) - $(stat -c %Y "$LOG" 2>/dev/null || date +%s) ) / 86400 ))
-    # awk plutôt qu'une boucle `read` : celle-ci perd la dernière ligne d'un fichier sans
-    # retour à la ligne final, défaut déjà payé une fois sur le relais des rappels datés.
-    BK_VERDICT=none; BK_LINE=0; BK_PROG=0; BK_OV="-"
-    IFS=' ' read -r BK_VERDICT BK_LINE BK_PROG BK_OV <<< "$(awk '
-        # `ov` = gardes levés portés par la ligne de verdict (backup.sh, 2026-08-09). Il se
-        # réarme à CHAQUE ligne de verdict, y compris les lignes en prose qui n en portent
-        # jamais : sans ce réarmement, un override lu tôt survivrait à des passages propres
-        # plus récents — l alarme survivant à sa cause, défaut déjà payé sur ce même bloc.
-        function grab_ov(l) {
-            if (match(l, /overrides=[A-Z_,]+/)) return substr(l, RSTART+10, RLENGTH-10)
-            return ""
-        }
-        # Journal structuré depuis le 2026-08-08 : backup.sh écrit lui-même sa classe,
-        # quelle que soit la voie d appel. Contrat des classes : voir backup.sh (verdict()).
-        /VERDICT=refus-retard/                                  { v="late"; vl=NR; ov=grab_ov($0); next }
-        /VERDICT=(err|refus-garde)/                             { v="err";  vl=NR; ov=grab_ov($0); next }
-        /VERDICT=ok/                                            { v="ok";   vl=NR; ov=grab_ov($0); next }
-        # Lignes en prose, antérieures au journal structuré : on continue de les lire pour
-        # ne pas perdre le verdict sur un journal existant. Le refus pour retard passe
-        # AVANT le motif générique — sa ligne porte le mot ERREUR sans être une panne.
-        /en retard de [0-9]+ commit/                            { v="late"; vl=NR; ov=""; next }
-        /ERREUR|ALARME/                                        { v="err"; vl=NR; ov=""; next }
-        /Sauvegarde terminée|Aucun changement à sauvegarder/    { v="ok";  vl=NR; ov=""; next }
-        /Pull --rebase|^\[main |^To |main -> main|files? changed|^ *create mode/ { prog=NR }
-        END { printf "%s %d %d %s", (v==""?"none":v), vl+0, prog+0, (ov==""?"-":ov) }
-    ' "$LOG" 2>/dev/null)"
-    : "${BK_VERDICT:=none}" "${BK_LINE:=0}" "${BK_PROG:=0}" "${BK_OV:=-}"
-    if [ "$BK_VERDICT" = "none" ] && [ -s "$LOG" ]; then
+# Verdict de sauvegarde = l'état réel des deux dépôts, pas le récit d'un journal.
+# Trois choses peuvent clocher, et chacune se mesure : des commits jamais poussés, un
+# arbre sale, un dépôt sans nouveau commit depuis longtemps (la clôture ne tourne plus).
+_verdict_depot() {
+    local repo="$1" nom="$2" ahead age ts
+    [ -d "$repo/.git" ] || return 0
+    ahead="$(git -C "$repo" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)"
+    if [ "${ahead:-0}" -gt 0 ]; then
         BACKUP_ERR=1
-        OUT="${OUT}⚠️ Journal de backup sans verdict lisible (ni réussite ni erreur) — voir $LOG"$'\n'
-    elif [ "$BK_PROG" -gt "$BK_LINE" ]; then
-        BACKUP_ERR=1
-        OUT="${OUT}⚠️ Dernier backup auto ni réussi ni en erreur nette (interrompu ? timeout SessionEnd ?) — voir $LOG"$'\n'
-    elif [ "$BK_VERDICT" = "err" ]; then
-        BACKUP_ERR=1
-        OUT="${OUT}⚠️ Dernier backup automatique en ERREUR — voir $LOG"$'\n'
-    elif [ "$LOG_AGE" -gt 7 ]; then
-        BACKUP_ERR=1
-        OUT="${OUT}⚠️ Backup auto sans trace depuis ${LOG_AGE}j — le hook SessionEnd tourne-t-il encore ? ($LOG)"$'\n'
-    elif [ "$BK_VERDICT" = "late" ] && [ "$BEHIND" -gt 0 ]; then
-        # Refus pour cause de poste non synchronisé : un garde-fou en bon état, pas une
-        # panne — donc PAS de BACKUP_ERR, la plomberie reste verte (décision du 2026-08-08,
-        # écrite en DESIGN). L état courant du retard vient de git ligne 30, jamais du
-        # journal : si le retard a disparu, ce refus n a plus d objet et on se taît.
-        # La limite qui vivait ici est TOMBÉE avec la bannière (2026-08-09) : le retard
-        # s évaluait sans fetch dans le mode terminal, si bien qu un retard apparu depuis
-        # pouvait faire taire ce rappel d une session. Il n y a plus qu un mode, et il fetche.
-        OUT="${OUT}⚠️ Dernière sauvegarde REFUSÉE : poste en retard de ${BEHIND} commit(s). Synchronise puis relance: bash ~/.claudeos/engine/sync.sh"$'\n'
+        OUT="${OUT}⚠️ Dépôt ${nom} : ${ahead} commit(s) JAMAIS POUSSÉ(S) — ils n'existent que sur ce poste. Relance la clôture : bash ~/.claude/engine/claudeos-cloture.sh"$'\n'
     fi
-    # Garde levé au dernier passage (2026-08-09). INDÉPENDANT de la chaîne ci-dessus, qui est
-    # exclusive : le cas qui coûte est justement `VERDICT=ok` avec un levier levé — la
-    # plomberie paraît verte alors qu'une alarme s'est tue par décision. On rappelle la
-    # décision, on ne la conteste pas : lever un levier est légitime, l'oublier ne l'est pas.
-    if [ "$BK_OV" != "-" ]; then
-        OUT="${OUT}🔓 Dernière sauvegarde passée avec garde levé : ${BK_OV} — l'alarme correspondante ne s'est pas exprimée. Vérifier que le motif tient toujours, ou relancer sans le levier."$'\n'
+    ts="$(git -C "$repo" log -1 --format=%ct 2>/dev/null || echo 0)"
+    if [ "${ts:-0}" -gt 0 ]; then
+        age=$(( ( $(date +%s) - ts ) / 86400 ))
+        if [ "$age" -gt 7 ]; then
+            BACKUP_ERR=1
+            OUT="${OUT}⚠️ Dépôt ${nom} sans nouveau commit depuis ${age}j — clôture oubliée ? bash ~/.claude/engine/claudeos-cloture.sh"$'\n'
+        fi
     fi
-fi
+    return 0
+}
+while IFS= read -r _d; do
+    [ -n "$_d" ] || continue
+    if [ "$_d" = "$HOME/.claude" ]; then _verdict_depot "$_d" "système"
+    else _verdict_depot "$_d" "${_d/#$HOME/$CLAUDEOS_TILDE}"; fi
+done < <(claudeos_repos)
 
-# Dernier sync INCOMPLET ? (application repo->live partielle, cf. sync.sh #14)
-# NB : ce fichier est un verrou d'état, pas une horloge — seul le mot INCOMPLET est lu.
-# Sa date ne mesure PAS la fraîcheur du poste (retard en commits et git log s'en chargent).
-SLOG="$SELF/sync-last.log"
-if [ -f "$SLOG" ] && grep -q "INCOMPLET" "$SLOG" 2>/dev/null; then
-    SYNC_INCOMPLETE=1
-    OUT="${OUT}⚠️ Dernier sync INCOMPLET (application repo→live partielle) — relance: bash ~/.claudeos/engine/sync.sh"$'\n'
-fi
+# Gardes levés à la dernière sauvegarde. Une alarme levée est légitime ; l'oublier ne l'est
+# pas. Le hook trace chaque levée, datée, dans le journal du dépôt visé.
+# Le journal des levées vit dans le `.git/` de CHAQUE dépôt : la liste suit `claudeos_repos`,
+# sinon une levée sur un dépôt client ne serait jamais rapportée au démarrage.
+# Sans git, le crochet l'écrit sous le `.claudeos/` de la racine : il n'y a pas de `.git/`.
+for _alog in $(claudeos_repos | sed 's|$|/.git/ALARMES_FORCEES.log|') "$ROOT/.claudeos/ALARMES_FORCEES.log"; do
+    [ -s "$_alog" ] || continue
+    _aday="$(tail -1 "$_alog" | cut -d' ' -f1)"
+    [ "$_aday" = "$(date '+%Y-%m-%d')" ] || continue
+    OUT="${OUT}🔓 Alarme(s) levée(s) aujourd'hui sur ${_alog#$HOME/} — l'alarme correspondante ne s'est pas exprimée. Vérifier que le motif tient toujours."$'\n'
+done
 
-# Dérive live<->repo à l'ÉTAT COURANT (ajouté 2026-08-06).
-# Motif : le verrou ci-dessus ne fait que rejouer le verdict laissé par le dernier sync —
-# une trace d'un état passé, ce que la fiche des contrôles interdit comme seule base d'alarme.
-# Une dérive apparue APRÈS un sync réussi (backup échoué, fichier écrasé hors session)
-# n'était vue par rien jusqu'au sync suivant. Mesure directe, ~0,4 s.
-# Avertit, ne bloque pas : c'est un écart à arbitrer, pas une désactivation silencieuse.
-claudeos_drift BOOT_DRIFT_MISSING BOOT_DRIFT_DIFFERS
-if [ "${#BOOT_DRIFT_MISSING[@]}" -gt 0 ]; then
-    OUT="${OUT}⚠️ ${#BOOT_DRIFT_MISSING[@]} fichier(s) du dépôt ABSENT(S) en local (sync jamais appliqué) — bash ~/.claudeos/engine/sync.sh"$'\n'
-fi
-if [ "${#BOOT_DRIFT_DIFFERS[@]}" -gt 0 ]; then
-    OUT="${OUT}⚠️ ${#BOOT_DRIFT_DIFFERS[@]} fichier(s) local/dépôt au contenu DIVERGENT (ex. ${BOOT_DRIFT_DIFFERS[0]#"$HOME"/}) — travail non sauvegardé, ou dernier backup en échec"$'\n'
-fi
-
-# La liste blanche cesse d'être silencieuse (2026-08-09). LECTURE SEULE.
-# Motif : le verrou de `.gitignore` refuse tout fichier NEUF, et ce refus n'était annoncé que
-# par `backup.sh` — en fin de séance, dans une sortie que le hook redirige vers un journal que
-# personne ne lit. Un fichier refusé n'existe plus que sur un poste : c'est la perte de
-# continuité la plus sournoise du système, et deux victimes l'ont prouvé (la spec de la vague
-# elle-même, et un résidu de rappel de voix refusé à chaque sauvegarde depuis le 2026-08-05).
-# La logique n'est pas recopiée ici : elle vit dans `synclib.sh`, appelée par les deux.
-# Une ligne par fichier, dans le bloc ALERTES — donc exclu du calcul du contrôle de poids
-# (#21), comme toute alerte datée : elle est bornée par construction et disparaît quand on
-# la traite. On ne bloque pas, on nomme ; c'est l'utilisateur qui décide d'autoriser ou non.
-BOOT_REFUSES=$(claudeos_refused_by_lock)
-if [ -n "$BOOT_REFUSES" ]; then
-    OUT="${OUT}📵 $(printf '%s\n' "$BOOT_REFUSES" | wc -l | tr -d ' ') fichier(s) refusé(s) par la liste blanche — ils n'existent que sur ce poste :"$'\n'
-    while IFS= read -r _rf || [ -n "$_rf" ]; do
-        [ -z "$_rf" ] && continue
-        OUT="${OUT}      ↳ ${_rf}"$'\n'
-    done <<< "$BOOT_REFUSES"
-    OUT="${OUT}      ↳ décider pour chacun : autorisation \`!<chemin>\` après le verrou de ~/.claudeos/.gitignore, ou déplacement hors zone sauvegardée."$'\n'
-fi
-
-# #7 : dernier backup fait HORS-LIGNE ? (garde-fou de fraîcheur évalué sur ref périmée)
-[ -f "$SELF/.last-offline-backup" ] && OUT="${OUT}⚠️ Dernier backup fait HORS-LIGNE (fraîcheur non garantie) — vérifie le retard: bash ~/.claudeos/engine/sync.sh"$'\n'
-
-# --- Avertissements du dernier autotest (2026-08-14) --------------------------
-# La sauvegarde les enregistre (synclib.sh, claudeos_selftest_warns_record) ; ici on les
-# relaie au réveil, comme les autres marqueurs — sans ce relais, ils n'existaient que
-# dans une sortie que le hook redirige vers un journal que personne ne lit. Anti-bruit :
-# le DÉTAIL le jour où l'ensemble change, une seule ligne — compte + ancienneté — ensuite.
-# L'ancienneté affichée dit d'elle-même qu'un avertissement traîne ; le traiter fait
-# disparaître la ligne à la sauvegarde suivante. LECTURE SEULE, comme tout ce script :
-# l'état appartient à backup.sh. Bloc ALERTES, donc hors du calcul de poids (#21).
-ST_BILAN="$(claudeos_selftest_warns_bilan)"
-if [ -n "$ST_BILAN" ]; then
-    ST_TETE="$(printf '%s\n' "$ST_BILAN" | head -1)"
-    ST_DEPUIS="${ST_TETE%%$'\t'*}"; ST_N="${ST_TETE##*$'\t'}"
-    if [ "$ST_DEPUIS" = "$(date '+%Y-%m-%d')" ]; then
-        OUT="${OUT}⚠️ ${ST_N} avertissement(s) à l'autotest de plomberie — ensemble nouveau ou modifié aujourd'hui :"$'\n'
-        while IFS= read -r _sw || [ -n "$_sw" ]; do
-            [ -z "$_sw" ] && continue
-            OUT="${OUT}      ↳ ${_sw}"$'\n'
-        done < <(printf '%s\n' "$ST_BILAN" | tail -n +2)
-    else
-        OUT="${OUT}⚠️ ${ST_N} avertissement(s) d'autotest, inchangés depuis ${ST_DEPUIS} — détail : bash ~/.claudeos/engine/selftest.sh"$'\n'
-    fi
-fi
+# Le relais des avertissements du gros autotest a disparu ici le 2026-08-22 : il lisait un
+# marqueur écrit par la sauvegarde rsync, mécanisme supprimé. Les contrôles qui survivent
+# sont ailleurs — les alarmes de contenu au hook de commit, le rangement des secrets au
+# wrapper de clôture, les contrôles de documents à la passe hebdomadaire.
 
 # Journal de session périmé ? (rituel de clôture qui ne tourne plus)
-JDATE=$(grep -m1 -oE '^## [0-9]{4}-[0-9]{2}-[0-9]{2}' "$MEM/SESSION_JOURNAL.md" 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
+# ORDRE DU FICHIER NON PRÉSUMÉ (2026-09-04). Cette ligne lisait la PREMIÈRE date (`grep -m1`).
+# Quatre séances écrites en fin de journal ont donc fait annoncer « journal arrêté au 2026-09-02 »
+# et une FAUSSE alerte de séance non clôturée, treize jours durant — un faux qui est même entré
+# dans le brief de l'audit du jour. Le sens d'insertion est en tête (compétence `reprise`), mais
+# un lecteur ne doit pas dépendre d'un geste humain : on prend la date MAXIMALE, quel que soit l'ordre.
+#
+# REPOINTÉ SUR LE JOURNAL D'ÉVÉNEMENTS le 2026-09-09 (plan de correction de l'audit, lot 5).
+# `memory/SESSION_JOURNAL.md` est GELÉ : la chronique des séances du niveau système vit désormais
+# dans `journal/*.jsonl`, événements de type `seance`. Lire le fichier gelé figerait la date à
+# celle du gel et produirait « journal périmé » puis « séance non clôturée » à CHAQUE démarrage,
+# donc une fausse alarme permanente — et une fausse alarme permanente éteint sa catégorie entière.
+# Le repli sur le fichier reste, pour le cas où le journal d'événements manque, et IL SE DIT :
+# un repli muet se lit comme une mesure faite. `CLAUDEOS_BOOT_SANS_JOURNAL=1` force le repli,
+# pour exercer cette branche sans éditer quoi que ce soit.
+# JLINE (la ligne « dernière session » du bilan) sort du MÊME événement, ici et non plus 180
+# lignes plus bas : deux lectures de deux sources pourraient afficher une date et le résumé
+# d'une autre séance.
+JLINE=""
+if [ "${CLAUDEOS_BOOT_SANS_JOURNAL:-0}" != "1" ]; then
+    _JRAW=$(python3 - "$ROOT" <<'PYEOF' 2>/dev/null || true
+import glob, json, os, sys
+root = sys.argv[1]
+best = None
+for f in sorted(glob.glob(os.path.join(root, 'journal', '*.jsonl'))):
+    try:
+        fh = open(f, encoding='utf-8')
+    except OSError:
+        continue
+    with fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if e.get('type') != 'seance':
+                continue
+            ts = str(e.get('ts', ''))
+            if len(ts) < 10:
+                continue
+            if best is None or ts > best[0]:
+                best = (ts, e)
+if best:
+    ts, e = best
+    txt = ' '.join(str(e.get('texte', '')).split())
+    if len(txt) > 240:
+        txt = txt[:237].rsplit(' ', 1)[0] + '…'
+    print(ts[:10])
+    print(txt)
+PYEOF
+)
+    JDATE=$(printf '%s\n' "$_JRAW" | sed -n 1p)
+    JLINE=$(printf '%s\n' "$_JRAW" | sed -n 2p)
+fi
+if [ -z "$JDATE" ]; then
+    JDATE=$(grep -oE '^## [0-9]{4}-[0-9]{2}-[0-9]{2}' "$MEM/SESSION_JOURNAL.md" 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | sort -r | head -1)
+    JLINE=$(grep -E '^## [0-9]{4}-[0-9]{2}-[0-9]{2}' "$MEM/SESSION_JOURNAL.md" 2>/dev/null | sort -r | head -1 | sed 's/^##[[:space:]]*//')
+    [ -n "$JDATE" ] && OUT="${OUT}⚠️ Chronique des séances lue en REPLI sur memory/SESSION_JOURNAL.md (gelé) — aucun événement \`seance\` dans ${ROOT}/journal/*.jsonl. La date ci-dessous peut être figée."$'\n'
+fi
 if [ -n "$JDATE" ]; then
-    DAYS=$(( ( $(date +%s) - $(date -d "$JDATE" +%s 2>/dev/null || echo "$(date +%s)") ) / 86400 ))
+    # PORTABILITÉ 2026-09-12 : idem. L'ancien repli rendait 0 jour, donc le journal n'était
+    # JAMAIS signalé périmé sur un poste sans `date -d`.
+    _j_ts=$(claudeos_epoch_of_date "$JDATE" || true)
+    if [ -z "$_j_ts" ]; then
+        DAYS=-1
+        OUT="${OUT}⚠️ Ancienneté du journal NON MESURÉE — date « ${JDATE} » illisible. Ne pas lire l'absence d'alerte comme un journal frais."$'\n'
+    else
+        DAYS=$(( ( $(date +%s) - _j_ts ) / 86400 ))
+    fi
     JDAYS=$DAYS
-    if [ "$DAYS" -gt 10 ]; then
+    if [ "$DAYS" -gt "$T_CRIT" ]; then
         # `JOURNAL_STALE` retiré le 2026-08-09 : son unique lecteur était la réplique de la
         # bannière. L ancienneté du journal reste dite ici, et graduée par le tableau d état.
-        OUT="${OUT}⚠️ Journal périmé (dernière entrée ${JDATE}, il y a ${DAYS}j) — le rituel de clôture ne tourne peut-être plus"$'\n'
+        OUT="${OUT}⚠️ Journal périmé (dernière entrée ${JDATE}, il y a ${DAYS}j > ${T_CRIT}) — le rituel de clôture ne tourne peut-être plus"$'\n'
     fi
 fi
 
-# --- Séance non clôturée ? (filet dernière-activité, 2026-08-09) ---
-# `backup.sh` laisse un marqueur local à chaque passage : sa date, et les fichiers qu'il a mis
-# en file. Si ce marqueur est POSTÉRIEUR à la dernière entrée de journal, une séance a travaillé
-# et enregistré sans se refermer — le rituel de clôture n'a pas tourné. L'interruption non
-# annoncée cesse d'être aveugle : on ne peut pas compter sur un signal de fin que l'utilisateur
-# ne donne pas toujours (le poste s'éteint, ou il passe à autre chose).
-# LECTURE SEULE, et dans le bloc ALERTES : c'est une alerte datée, bornée, qui disparaît quand
-# on la traite — donc exclue du calcul du contrôle de poids (#21), comme les autres.
-# ÉCHAPPATOIRE, et elle est nécessaire : l'écriture de reprise en séance laisse un bloc « Séance en cours »
-# daté dans la reprise du niveau. S'il en existe un du même jour, la séance a bien laissé son
-# état — la clôture reste à faire, mais rien n'est perdu, et crier serait du bruit.
-ACTMARK="$SELF/.derniere-activite"
-if [ -f "$ACTMARK" ] && [ -n "$JDATE" ]; then
-    AMDATE=$(head -1 "$ACTMARK" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
+# --- Séance non clôturée ? (filet, réécrit le 2026-08-22) ---
+# Il reposait sur un marqueur que `backup.sh` déposait à chaque passage ; la copie rsync est
+# morte, donc le marqueur ne s'écrit plus. La même question se pose maintenant à git, qui est
+# la source et non une trace : si le dernier commit du dépôt système est POSTÉRIEUR à la
+# dernière entrée de journal, une séance a travaillé et enregistré sans se refermer.
+# LECTURE SEULE, dans le bloc ALERTES : alerte datée, bornée, qui disparaît quand on la traite.
+# ÉCHAPPATOIRE nécessaire : une séance qui a laissé un bloc « Séance en cours » daté dans une
+# reprise a bien consigné son état — la clôture reste à faire, mais rien n'est perdu, et crier
+# serait du bruit.
+if [ -n "$JDATE" ] && [ -d "$ROOT/.git" ]; then
+    AMDATE=$(git -C "$ROOT" log -1 --format=%cd --date=short 2>/dev/null || true)
     if [ -n "$AMDATE" ] && [[ "$AMDATE" > "$JDATE" ]]; then
         AM_INCR=""
-        while IFS= read -r _hf; do
-            grep -qF "Séance en cours" "$_hf" 2>/dev/null \
-                && grep -qF "$AMDATE" "$_hf" 2>/dev/null && { AM_INCR=1; break; }
-        done < <( { echo "$HOME/.claude/HANDOFF.md"
-                    while IFS= read -r _wr; do
-                        find "$_wr" -maxdepth 3 -name HANDOFF.md -type f 2>/dev/null
-                    done < <(claudeos_ws_roots); } )
+        # BI-RÉGIME depuis le 2026-09-08 (geste 2.4). Un niveau qui porte `ETAT.md` a un
+        # fichier de reprise GELÉ : il ne dira plus jamais « séance en cours », donc le lire ici
+        # allumerait cette alerte à CHAQUE session qui suit un commit — une fausse alarme
+        # permanente, et une fausse alarme permanente éteint sa catégorie entière.
+        # Pour ces niveaux la preuve d'une séance écrite est un événement `seance` du journal
+        # portant la date du commit. Cherché au `grep` sur le journal, pas par un parseur : on
+        # ne teste que la présence d'une date sur une ligne de type « seance ».
+        while IFS= read -r _lv; do
+            [ -n "$_lv" ] || continue
+            for _j in "$_lv"/journal/*.jsonl; do
+                [ -e "$_j" ] || continue
+                grep '"type": *"seance"' "$_j" 2>/dev/null | grep -qF "$AMDATE" \
+                    && { AM_INCR=1; break 2; }
+            done
+        done < <(claudeos_repos)
+        # Le repli sur un bloc « Séance en cours » d'un `HANDOFF.md` est RETIRÉ le 2026-09-22 : les
+        # fichiers de reprise sont supprimés, la seule preuve d'une séance écrite est l'événement `seance`.
         if [ -z "$AM_INCR" ]; then
             OUT="${OUT}📌 Séance du ${AMDATE} non clôturée (journal arrêté au ${JDATE}) — elle a touché :"$'\n'
             # Substitution de PROCESSUS et non tuyau : un `while read` en bout de tuyau tourne
@@ -365,158 +389,156 @@ if [ -f "$ACTMARK" ] && [ -n "$JDATE" ]; then
             # sans sa liste, sans rien signaler.
             while IFS= read -r _af || [ -n "$_af" ]; do
                 [ -n "$_af" ] && OUT="${OUT}      ↳ ${_af}"$'\n'
-            done < <(tail -n +2 "$ACTMARK" | head -10)
+            done < <(git -C "$ROOT" show --name-only --format= HEAD 2>/dev/null | head -10)
             OUT="${OUT}      ↳ écrire l'entrée de journal de cette séance avant d'ouvrir la suivante."$'\n'
         fi
     fi
 fi
 
-# Skills attendus (repo = source de vérité) absents en local ?
-REPO_SK="$ROOT/system/skills"; LOCAL_SK="$HOME/.claude/skills"
-if [ -d "$REPO_SK" ]; then
-    for d in "$REPO_SK"/*/; do
-        [ -d "$d" ] || continue
-        n=$(basename "$d")
-        [ -d "$LOCAL_SK/$n" ] || SKILLS_MISSING="${SKILLS_MISSING} ${n}"
-    done
-    [ -n "$SKILLS_MISSING" ] && OUT="${OUT}⚠️ Skill(s) manquant(s) en local (présents dans le repo) :${SKILLS_MISSING} — lance: bash ~/.claudeos/engine/sync.sh"$'\n'
-fi
+# Le contrôle « compétence présente au dépôt mais absente en local » a disparu le
+# 2026-08-22 : le dépôt système EST `~/.claude`, il n'y a plus deux copies à comparer.
+# Ce qu'une compétence manquante signifie désormais, c'est un `git pull` non fait — dit
+# par le bloc d'écart plus haut.
 
-# Amorçages auto-détectables par la machine (donc PAS dans le changelog) :
-# la ligne bannière de démarrage dans ~/.bashrc et le plugin superpowers.
-if [ -f "$SELF/boot-wrapper.sh" ] && ! grep -qF 'boot-wrapper.sh' "$HOME/.bashrc" 2>/dev/null; then
+# Amorçage auto-détectable par la machine (donc PAS dans le changelog) : la ligne de démarrage
+# ClaudeOS dans le fichier de shell. Le greffon superpowers n'est PAS un prérequis du template :
+# son contrôle, propre au poste de l'auteur, n'est pas livré (A5, 2026-10-01).
+# Quel fichier de shell porte la ligne ? Le poste n'est pas toujours en bash : sur macOS
+# le shell de connexion est zsh, `~/.bashrc` n'y existe même pas, et ce garde criait donc
+# une absence FAUSSE à chaque démarrage alors que `~/.zshrc` était correctement branché
+# (constaté le 2026-09-12 à la migration sur le Mac). On balaie les quatre fichiers
+# plausibles, et le message nomme celui du shell COURANT plutôt qu'un `.bashrc` en dur.
+_claudeos_rc_trouve=""
+for _claudeos_rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+    if grep -qF 'claudeos-boot.sh' "$_claudeos_rc" 2>/dev/null; then _claudeos_rc_trouve="$_claudeos_rc"; break; fi
+done
+case "${SHELL:-}" in *zsh) _claudeos_rc_cible="~/.zshrc" ;; *) _claudeos_rc_cible="~/.bashrc" ;; esac
+if [ -f "$SELF/claudeos-boot.sh" ] && [ -z "$_claudeos_rc_trouve" ]; then
     # Le mot « bannière » est tombé le 2026-08-09 avec la bannière : ce que `~/.bashrc` doit
     # sourcer est le WRAPPER, dont le métier est d'injecter le prompt de bilan au lancement.
     # Sans lui, la session démarre muette — le contexte est bien injecté, mais rien ne fait
-    # parler l'assistant en premier. Le renvoi de document est conservé mot pour mot : la
-    # chaîne d'export le réécrit par substitution littérale.
-    OUT="${OUT}⚠️ Wrapper de démarrage absent de ~/.bashrc (le bilan ne s'ouvrira pas tout seul) — ajouter à ~/.bashrc la ligne : source ~/.claudeos/engine/boot-wrapper.sh"$'\n'
-fi
-if ! find "$HOME/.claude/plugins" -maxdepth 3 -iname '*superpowers*' 2>/dev/null | grep -q .; then
-    OUT="${OUT}⚠️ Plugin superpowers absent — lance: bash ~/.claudeos/engine/sync.sh"$'\n'
+    # parler l'assistant en premier. Le message porte la ligne elle-même : il renvoyait à une
+    # fiche de remise à niveau que le template ne livre pas, et dont la section citée ne la
+    # portait pas (A5, 2026-10-01).
+    OUT="${OUT}⚠️ Wrapper de démarrage ClaudeOS absent de '"$_claudeos_rc_cible"' (le bilan ne s'ouvrira pas tout seul) — la ligne à y ajouter : [ -f ~/.claude/engine/claudeos-boot.sh ] && . ~/.claude/engine/claudeos-boot.sh"$'\n'
 fi
 
-# Index de rappel absent ou périmé ?
-IDX="$MEM/INDEX.md"
-if [ ! -f "$IDX" ]; then
-    # `INDEX_BAD` retiré le 2026-08-09, même motif que `JOURNAL_STALE` ci-dessus : lu par la
-    # seule bannière. Le tableau d état porte déjà l état de la carte de rappel, gradué.
-    OUT="${OUT}⚠️ Index de rappel absent (memory/INDEX.md) — sera régénéré au prochain backup"$'\n'
-else
-    IDATE=$(grep -m1 -oE 'auto-généré le [0-9]{4}-[0-9]{2}-[0-9]{2}' "$IDX" 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
-    if [ -n "$IDATE" ]; then
-        ID=$(( ( $(date +%s) - $(date -d "$IDATE" +%s 2>/dev/null || echo "$(date +%s)") ) / 86400 ))
-        IDAYS=$ID
-        if [ "$ID" -gt 10 ]; then
-            OUT="${OUT}⚠️ Index de rappel périmé (généré ${IDATE}, il y a ${ID}j) — relance backup.sh"$'\n'
-        fi
-    fi
+# L'INDEX DE RAPPEL N'A PLUS D'ÂGE, et ce bloc sort le 2026-09-08 (geste 2.7).
+# Ce qu'il y avait ici : l'absence et la péremption de `memory/INDEX.md`, plus la ligne
+# MEMORY CORE du tableau d'état, graduée sur son ancienneté. `INDEX.md` est GELÉ et
+# `build-index.sh` est SUPPRIMÉ : il n'y a plus de générateur, donc plus rien à périmer, et
+# une ligne d'état sur l'âge d'un fichier figé aurait vieilli sans jamais rien signaler.
+# Ce qui le remplace est déjà affiché plus bas : « État du système — N caractères ».
+IDAYS=-1
+
+# --- L'ETAT DU NIVEAU SYSTEME VIENT DE `ETAT.md` depuis le 2026-09-08 (geste 2.4) ------
+# RESTAURÉ le 2026-09-08 : le retrait du bloc de l'index ci-dessus avait pris `THREADS=` pour
+# borne et avalé CE bloc avec lui. `bash -n` ne l'a pas vu — il vérifie la syntaxe, pas une
+# variable non liée —, et le contrôle 21, qui mesurait ce texte, venait d'être retiré au même
+# geste. Deux gardes absents au même moment sur le même fichier : c'est ce qui a laissé passer.
+# BI-RÉGIME, et le discriminant est nommé : un niveau qui porte `ETAT.md` parle par lui ; un
+# BI-REGIME CLOS le 2026-09-09 : les 29 niveaux portent un `ETAT.md`, tous parlent par lui.
+ETAT_SYS="$HOME/.claude/ETAT.md"
+ETAT_TXT=""
+if [ -f "$ETAT_SYS" ]; then
+    ETAT_TXT=$(python3 - "$ETAT_SYS" 2>/dev/null <<'PYETAT'
+import re, sys
+t = open(sys.argv[1], encoding="utf-8").read()
+
+def section(nom):
+    m = re.search(r"^## " + re.escape(nom) + r"\n(.*?)(?=^## |^---$|\Z)", t, re.M | re.S)
+    return [l for l in (m.group(1).splitlines() if m else []) if l.strip()]
+
+def court(l):
+    return re.sub(r"\s+", " ", l).strip()[:120]
+
+print(f"État du système — {len(t)} caractères, projeté depuis le journal :")
+for l in section("État courant")[:4]:
+    print("  " + court(l))
+compte = {}
+chantier = "?"
+for l in section("Ce qui reste"):
+    if l.startswith("### "):
+        chantier = l[4:].strip()
+    elif l.startswith("- "):
+        compte[chantier] = compte.get(chantier, 0) + 1
+if compte:
+    total = sum(compte.values())
+    detail = " · ".join(f"{k} {v}" for k, v in sorted(compte.items()))
+    print(f"Dus ouverts du système ({total}) : {detail}")
+    print("  → le détail : python3 ~/.claude/engine/etat.py vue --tous")
+PYETAT
+)
 fi
 
-# --- Identité de poste + file de rattrapage manuel (modèle ciblé par poste) ---
-# Résout hostname -> id via le registre. Inconnu = fail-loud (jamais un faux « rien
-# à rattraper »). Si connu : remonte le nombre d'entrées qui ciblent CE poste — dans
-# OUT, donc visible AUSSI dans le contexte du modèle (pas seulement la bannière).
-ME=""; PEND=0
-REG="$SYNC_MACHINES"
-if [ -f "$REG" ]; then
-    ME=$(awk -v h="$(hostname)" '!/^[[:space:]]*#/ && NF>=2 && $1==h {print $2; exit}' "$REG")
-    if [ -z "$ME" ]; then
-        OUT="${OUT}⚠️ Poste '$(hostname)' absent du registre SYNC_MACHINES — ajoute-le (sinon le rattrapage par poste est aveugle)"$'\n'
-    elif [ -x "$SELF/machine-todo.sh" ]; then
-        PEND=$(SYNC_MACHINE="$ME" "$SELF/machine-todo.sh" count 2>/dev/null || echo 0)
-        [ "${PEND:-0}" -gt 0 ] && OUT="${OUT}📋 ${PEND} rattrapage(s) manuel(s) pour ce poste (${ME}) — bash ~/.claudeos/engine/machine-todo.sh pending"$'\n'
-    fi
-fi
-
-T_WARN=7; T_CRIT=14   # paliers d'ancienneté (jours) : <T_WARN vert, T_WARN..T_CRIT jaune, >T_CRIT rouge
-
-# --- Rappel des dernières sessions ---
-# Ce qui reste à faire, vu par ancienneté et non par dernière session : la vue agrégée
-# (engine/build-threads.sh, régénérée à chaque sauvegarde) porte l'âge de première apparition
-# et le nombre de reconductions — c'est ça qui permet de PROPOSER au lieu de rapporter. Repli
-# sur les fils de la dernière session si le fichier n'existe pas encore (poste neuf).
-# Le créneau du jour (2026-08-09, le document de conception) : la déclaration est relue ICI et non
-# recopiée depuis la vue, parce que la vue est régénérée à la SAUVEGARDE — donc la veille au
-# soir — et qu'un créneau est une propriété d'aujourd'hui. La vue apporte l'attribution d'un
-# fil à un domaine, ce démarrage apporte la date. Aucun fil n'est masqué : le hors-créneau est
-# marqué, et c'est la consigne de démarrage qui l'écarte de la PROPOSITION.
-THREADS=$(python3 - "$MEM" "$CFG/CRENEAUX" "$(date +%u)" 2>/dev/null <<'PYEOF'
-import re, sys, os
+THREADS=$(python3 - "$MEM" "$REG/CRENEAUX" "$(date +%u)" "$SELF" 2>/dev/null <<'PYEOF'
+import re, sys, os, subprocess
 MEM, CRENEAUX, DOW = sys.argv[1], sys.argv[2], int(sys.argv[3]) - 1
+sys.path.insert(0, sys.argv[4])
+from lib_creneaux import DAYS, parse_creneaux   # source unique du format (2026-08-22)
 def out(s): print(s.rstrip())
 
-DAYS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim']
-creneaux = {}
-try:
-    for line in open(CRENEAUX, encoding='utf-8'):
-        line = line.split('#', 1)[0].strip()
-        f = line.split()
-        if len(f) < 2: continue
-        idx = sorted({DAYS.index(j) for j in f[1].split(',') if j in DAYS})
-        if idx: creneaux[f[0]] = idx
-except OSError:
-    pass
+creneaux = parse_creneaux(CRENEAUX)
 ouverts = sorted(w for w, d in creneaux.items() if DOW in d)
 fermes = sorted(w for w in creneaux if w not in ouverts)
 
-p = f'{MEM}/OPEN_THREADS.md'
-if os.path.exists(p):
-    t = open(p, encoding='utf-8').read()
-    ech = re.search(r'^## Échéances dépassées\n(.*?)(?=^## |\Z)', t, re.M | re.S)
-    # 6 colonnes depuis le 2026-08-09 : `Créneau` s'est insérée entre `Reconduit` et `Geste`.
-    tab = re.findall(r'^\| (\d+) j \| (\d{4}-\d{2}-\d{2}) \| ([^|]*) \| ([^|]*) \| ([^|]*) \| ([^|]*) \|$',
-                     t, re.M)
-    if creneaux:
-        out(f"Créneau du jour ({DAYS[DOW]}) : "
-            + (f"ouvert pour {', '.join(ouverts)}" if ouverts else "aucun domaine à créneau n'est ouvert")
-            + (f" ; hors créneau : {', '.join(fermes)}." if fermes else "."))
-    if ech and ech.group(1).strip():
-        out('Échéances dépassées :')
-        for l in ech.group(1).strip().splitlines()[:3]:
+# LES FILS VIENNENT DE `etat.py fils`, plus de `OPEN_THREADS.md` — bascule du 2026-09-09.
+# Ce fichier était produit par `build-threads.sh`, qui ratissait des TITRES dans les fichiers de reprise ;
+# depuis la phase 3 toutes les reprises sont gelées, le générateur ne voyait plus rien, et le
+# fichier lui-même est GELÉ depuis le 2026-09-08 — le démarrage affichait donc une vue FIGÉE.
+# L'ANCIENNETÉ REPART DU JOUR DE LA BASCULE et c'est une perte assumée : le `ts` d'un événement
+# `ouvre` est celui de son écriture, et le report a tout daté du 2026-09-08 ou du 09. Les
+# anciennetés d'avant vivent dans `memory/OPEN_THREADS.md`, gelé, cherchées au `grep`.
+# LA DORMANCE N'A RIEN À CÂBLER ICI (2026-09-15) : `etat.py fils` retire lui-même les dus non
+# touchés depuis `DORMANT_JOURS` et en imprime le COMPTE en pied, sur une ligne `[etat]` que la
+# boucle ci-dessous relaie déjà comme les autres. Un dormant n'est donc jamais perdu de vue — il
+# est compté à chaque démarrage — et `ETAT.md` n'a pas bougé : la dormance est une règle de
+# LECTURE, motivée en tête d'`etat.py` à `DORMANT_JOURS`.
+if creneaux:
+    out(f"Créneau du jour ({DAYS[DOW]}) : "
+        + (f"ouvert pour {', '.join(ouverts)}" if ouverts else "aucun domaine à créneau n'est ouvert")
+        + (f" ; hors créneau : {', '.join(fermes)}." if fermes else "."))
+_fils = subprocess.run([sys.executable, f'{os.path.expanduser("~")}/.claude/engine/etat.py',
+                        'fils', '--tous', '--limite', '5'],
+                       capture_output=True, text=True)
+if _fils.returncode == 0 and _fils.stdout.strip():
+    out('Fils ouverts, par ancienneté :')
+    for l in _fils.stdout.strip().splitlines():
+        if l.startswith('[') or l.startswith('    '):
             out('  ' + l.strip()[:170])
-    if tab:
-        out('Fils ouverts, par ancienneté :')
-        for a, d, rec, cren, g, txt in tab[:5]:
-            r = f", reconduit {rec.strip()}" if rec.strip() not in ('—', '') else ''
-            c = cren.strip()
-            ws = c.split('·')[0].strip()
-            k = ''
-            if ws in creneaux:
-                k = f", {c.split('·',1)[1].strip()}" if '·' in c else ''
-                if ws not in ouverts: k += ' — HORS CRÉNEAU aujourd’hui'
-            out(f'  - [{a} j{r}{k}] {g.strip()} : ' + re.sub(r'\s+', ' ', txt).strip()[:150])
+        elif l.startswith('[etat]'):
+            out('  ' + l.strip())
 else:
-    j = f'{MEM}/SESSION_JOURNAL.md'
-    try: t = open(j, encoding='utf-8').read()
-    except OSError: sys.exit(0)
-    m = re.search(r'^## .*?(?=^## |\Z)', t, re.M | re.S)
-    if m:
-        f = re.search(r'^\*\*Fils ouverts\*\*.*?(?=^\*\*|^---|\Z)', m.group(0), re.M | re.S)
-        if f: out(f.group(0).strip())
+    # Une sortie vide ici est un DÉFAUT, pas une absence de fils : `etat.py fils` rend une ligne
+    # même quand il n'y en a aucun. Le dire, plutôt que de laisser un blanc qui se lit « rien à faire ».
+    out("  (vue des fils indisponible — jouer : python3 ~/.claude/engine/etat.py fils --tous)")
 PYEOF
 )
-JLINE=$(grep -m1 '^## ' "$MEM/SESSION_JOURNAL.md" 2>/dev/null | sed 's/^##[[:space:]]*//')
+# JLINE EST CALCULÉE EN TÊTE, avec JDATE (2026-09-09, lot 5). Elle se lisait ici, sur
+# `memory/SESSION_JOURNAL.md`, par un second `grep` indépendant : deux lectures de deux
+# sources auraient pu afficher la date d'une séance et le résumé d'une autre. Une seule
+# mesure, un seul événement.
 
 # --- Tableau d'état, consommé par le contexte JSON ---
 # Il servait aussi la bannière de terminal, retirée le 2026-08-09 ; c'est la moitié VIVANTE
 # de ce qui était partagé, et la raison pour laquelle le retrait s'est arrêté à la bannière.
 # Émet des lignes LABEL|STATUT|GRAVITE (gravite = ok, warn ou crit).
+_DEP_NOTE=""
+[ "$_SONDE_RETARD" = 0 ] && _DEP_NOTE=" — un seul poste, retard non sondé"
 build_dashboard() {
-    # CONFIG SYNC
-    if [ "$GIT_OK" = "0" ]; then echo "CONFIG SYNC|GIT ABSENT|crit"
-    elif [ "$BEHIND" -gt 0 ]; then echo "CONFIG SYNC|EN RETARD ${BEHIND} — sync.sh|warn"
-    elif [ "$DIRTY" -gt 0 ]; then echo "CONFIG SYNC|OK (${DIRTY} non commit)|ok"
-    else echo "CONFIG SYNC|OK|ok"; fi
-    # MEMORY CORE (index de rappel) — paliers d'ancienneté
-    if [ ! -f "$IDX" ]; then echo "MEMORY CORE|INDEX À RÉGÉNÉRER|warn"
-    elif [ "$IDAYS" -gt "$T_CRIT" ]; then echo "MEMORY CORE|INDEX PÉRIMÉ (${IDAYS}j)|crit"
-    elif [ "$IDAYS" -gt "$T_WARN" ]; then echo "MEMORY CORE|index vieillit (${IDAYS}j)|warn"
-    else echo "MEMORY CORE|OK|ok"; fi
-    # LEARNING LOOP
-    if [ "$DISTILL_DUE" = "1" ]; then echo "LEARNING LOOP|DISTILLATION DUE|warn"
-    elif [ "$PROP_N" -gt 0 ]; then echo "LEARNING LOOP|${PROP_N} PROPOSITION(S)|warn"
-    else echo "LEARNING LOOP|idle|ok"; fi
+    # DÉPÔTS
+    if [ "$GIT_OK" = "0" ]; then echo "DÉPÔTS|GIT ABSENT|crit"
+    elif [ "$BEHIND" -gt 0 ]; then echo "DÉPÔTS|EN RETARD ${BEHIND} — git pull --rebase|warn"
+    elif [ "$DIRTY" -gt 0 ]; then echo "DÉPÔTS|OK (${DIRTY} non commité)${_DEP_NOTE}|ok"
+    else echo "DÉPÔTS|OK${_DEP_NOTE}|ok"; fi
+    # MEMORY CORE — RETIRÉE le 2026-09-08 (geste 2.7). Elle graduait l'âge de `memory/INDEX.md`,
+    # gelé et sans générateur : la ligne aurait vieilli sans jamais rien signaler. La taille de
+    # l'état projeté est affichée dans « CE QUI RESTE À FAIRE », qui est un fait, pas un âge.
+    if [ -f "$HOME/.claude/ETAT.md" ]; then echo "ÉTAT SYSTÈME|projeté|ok"; fi
+    # LEARNING LOOP — RETIRÉE le 2026-09-08 avec le rituel (geste 2.4, D-E). Elle comptait les
+    # titres de `LEARNING_PROPOSALS.md`, qui est GELÉ : ses candidates sont devenues des `du`
+    # ouverts du niveau, donc elles s'affichent dans « Ce qui reste ». Garder la ligne aurait
+    # affiché le MÊME travail deux fois, depuis deux fichiers d'âges différents.
     # SECURITY (dette de rotation de secrets) — seulement si dette
     [ "$SEC_N" -gt 0 ] && echo "SECURITY|${SEC_N} SECRET(S) À RÉGÉNÉRER|crit"
     # SESSION JOURNAL — paliers d'ancienneté
@@ -525,16 +547,13 @@ build_dashboard() {
     elif [ "$JDAYS" -gt "$T_WARN" ]; then echo "SESSION JOURNAL|vieillit (${JDATE})|warn"
     else echo "SESSION JOURNAL|${JDATE}|ok"; fi
     # PLUMBING
-    if [ "$BACKUP_ERR" = "1" ]; then echo "PLUMBING|BACKUP EN ERREUR|crit"
-    elif [ "$SYNC_INCOMPLETE" = "1" ]; then echo "PLUMBING|SYNC INCOMPLET|crit"
-    elif [ -n "$SKILLS_MISSING" ]; then echo "PLUMBING|SKILL(S) MANQUANT(S)|warn"
+    if [ "$BACKUP_ERR" = "1" ]; then echo "PLUMBING|SAUVEGARDE À VÉRIFIER|crit"
     else echo "PLUMBING|OK|ok"; fi
-    # CROISIÈRE (compteur de convergence — le document de conception). Jamais `warn` : ce n'est pas un défaut
+    # CROISIÈRE (compteur de convergence — DESIGN « Ce que ClaudeOS est »). Jamais `warn` : ce n'est pas un défaut
     # d'être en chantier, c'est un fait à voir. Muet si le dépôt n'a pas d'historique lisible.
     [ "$CRUISE_D" -ge 0 ] && echo "CROISIÈRE|J ${CRUISE_D}/28 (tout chantier remet à zéro ; commit « incident: » non)|ok"
-    # CATCH-UP (file de rattrapage manuel par poste — le document de conception, conditionnel)
-    if [ -z "$ME" ]; then echo "CATCH-UP|POSTE NON ENREGISTRÉ|crit"
-    elif [ "${PEND:-0}" -gt 0 ]; then echo "CATCH-UP|${PEND} À RATTRAPER (machine-todo.sh pending)|warn"; fi
+    # CATCH-UP (file de rattrapage manuel par poste — DESIGN « la file de rattrapage », conditionnel)
+    [ "${PEND:-0}" -gt 0 ] && echo "À RATTRAPER|${PEND} entrée(s) — ~/.claude/TODO.md|warn"
 }
 DASH_ROWS=$(build_dashboard)
 
@@ -547,15 +566,16 @@ DASH_ROWS=$(build_dashboard)
 DIRECTIVE="⟦CONSIGNE DE DÉMARRAGE — ne pas recopier telle quelle à l'écran⟧
 Question implicite de lancement : « tu es à jour ? »
 Ouvre ta TOUTE PREMIÈRE réponse par ce bilan, AVANT la demande de l'utilisateur, dans cet ordre :
-1) Poste : à jour, ou en retard de N commit(s). Si en retard, PROPOSE « bash ~/.claudeos/engine/sync.sh » sans le lancer — le démarrage n'agit jamais seul.
+1) Poste : à jour, ou en retard de N commit(s). Si en retard, PROPOSE « git -C <dépôt> pull --rebase » sur chacun des dépôts en retard, nommés un par un, sans le lancer — le démarrage n'agit jamais seul.
 2) Tableau d'état (bloc ci-dessous).
 3) Dernière session : poste + résumé.
-4) Signaux actionnables s'il y en a (⏰ rappels, 🔐 dette, 🧪 distillation, 🔍 audit — bloc ALERTES).
+4) Signaux actionnables s'il y en a (⏰ rappels, 🔐 dette, 🔍 audit — bloc ALERTES).
 5) TERMINE PAR UNE PROPOSITION, pas par un état : depuis CE QUI RESTE À FAIRE, dis en 2 ou 3 lignes
    ce que tu ferais aujourd'hui et dans quel ordre. Distingue ce qui se FAIT, ce qui demande sa
    DÉCISION, ce qui n'attend que la RELANCE d'un tiers. Ne propose jamais ce qui est bloqué
-   ailleurs ni ce qui est marqué HORS CRÉNEAU : listé et daté, jamais proposé. Nomme l'ancienneté
-   dans l'unité de la vue (« reconduit 9 fois depuis 15 jours », pas « en retard »). Ta proposition
+   ailleurs ni ce qui est marqué HORS CRÉNEAU : listé et daté, jamais proposé. Un dépassement de
+   plafond appartient à l'audit : ni proposé, ni sa mesure relayée — fil ou autotest, même règle.
+   Nomme l'ancienneté dans l'unité de la vue (« reconduit 9 fois depuis 15 jours », pas « en retard »). Ta proposition
    n'est pas un ordre : il connaît un contexte que ces fichiers ignorent, il tranche.
 Puis enchaîne sur sa demande.
 "
@@ -584,36 +604,31 @@ ${LASTSESS}
 ${ALERTS}
 
 --- CE QUI RESTE À FAIRE ---
+${ETAT_TXT}
 ${THREADS:-(aucun fil ouvert consigné)}
 
 --- POUR ALLER PLUS LOIN ---
-Détail des sessions passées : ${MEM}/SESSION_JOURNAL.md
-Ne le lire que si l'utilisateur déclare un contexte de travail ou demande l'historique."
+Détail des sessions passées : événements \`seance\` de ${ROOT}/journal/*.jsonl
+Ne les lire que si l'utilisateur déclare un contexte de travail ou demande l'historique."
 
-# --- BILAN_DEMARRAGE : le bilan d'ouverture est déclinable à l'entretien (2026-08-14) ---
-# La réponse vit dans engine/config/CONDITIONS, écrite par assemble-rules.sh et résolue
-# depuis l'emplacement du SCRIPT. Fichier absent = toutes les conditions vraies, même
-# doctrine que l'autotest : un système installé sans entretien — l'auteur compris — garde
-# le bilan. Condition fausse : la consigne d'ouverture et le bilan ne partent pas, et avec
-# eux tout ce que la personne a explicitement décliné — tableau d'état, dernière session,
-# rappels, fils ouverts, proposition du jour, avertissements d'autotest.
-# UNE GARDE NE SE DÉCLINE PAS : la dette de sécurité sort dans tous les cas — un secret à
-# régénérer se signale même à qui a décliné le reste, et le règlement livré porte la même
-# règle hors de tout bloc conditionnel.
-_CONDS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config/CONDITIONS"
-if [ -f "$_CONDS" ] && ! grep -qx "BILAN_DEMARRAGE" "$_CONDS"; then
-    SEC_LINES="$(printf '%s\n' "$OUT" | grep '🔐' || true)"
+# BILAN_DEMARRAGE=non (`reglages/REPONSES`) — l'installateur a décliné le bilan d'ouverture à
+# l'entretien. La consigne et le tableau sortent ; la DETTE DE SÉCURITÉ reste : une garde ne se
+# décline pas (plan V3, lot 5, geste 3 ; rétabli dans la copie le 2026-10-01, A6). Clé absente :
+# le bilan reste, poste non réglé, jamais une valeur d'usine.
+if [ "$(claudeos_reponse BILAN_DEMARRAGE 2>/dev/null)" = "non" ]; then
+    _dette="$(printf '%s\n' "${OUT:-}" | grep '🔐' || true)"
     CTX_FULL="=== ClaudeOS boot ===
-Bilan de démarrage décliné à l'installation : pas d'état des lieux d'ouverture, répondre directement à la demande."
-    [ -n "$SEC_LINES" ] && CTX_FULL="${CTX_FULL}
-
---- DETTE DE SÉCURITÉ — à relayer dès la première réponse, dans tous les cas ---
-${SEC_LINES}"
+⟦CONSIGNE DE DÉMARRAGE — ne pas recopier telle quelle à l'écran⟧
+Bilan d'ouverture décliné à l'entretien (BILAN_DEMARRAGE=non) : réponds directement à la demande."
+    [ -n "$_dette" ] && CTX_FULL="${CTX_FULL}
+Seule la dette de sécurité se signale, en une ligne, avant la réponse :
+${_dette}"
 fi
 
 # --- Session de PROJET : contexte réduit (2026-08-12) ---------------------------
-# Une session lancée par session-open.sh porte `OS_SESSION_SCOPE=projet`. Sans la
-# variable, rien ne change : le bilan complet ci-dessus reste le défaut.
+# Une session de projet porte `CLAUDEOS_SESSION_SCOPE=projet`, posé par tmux à la création
+# (`claudeos-session.sh`). Sans la variable, rien ne change : le bilan complet ci-dessus
+# reste le défaut.
 #
 # POURQUOI CETTE BRANCHE EXISTE, mesuré au premier essai réel. Le rôle de la session
 # était dit dans le texte de lancement de l'onglet, et ça n'a pas suffi : la consigne
@@ -621,33 +636,91 @@ fi
 # a donc rendu le tableau d'état, proposé `sync.sh` et relayé les signaux racine —
 # exactement ce qu'elle ne doit pas faire. Un texte de lancement ne peut pas défaire
 # une consigne injectée : c'est la consigne injectée qu'il faut changer.
-if [ "${OS_SESSION_SCOPE:-}" = "projet" ]; then
-    # Niveau déduit du dossier courant, jamais écrit en dur : plusieurs postes, et
-    # le dossier personnel diffère. Hors `workstations/`, on retombe sur le chemin nu.
-    _lvl="${PWD#"$HOME"/workstations/}"
-    [ "$_lvl" = "$PWD" ] && _lvl="$PWD"
-    _hoff="$PWD/HANDOFF.md"
-    [ -f "$_hoff" ] && _hoff_st="présente" || _hoff_st="à créer au premier palier"
+if [ "${CLAUDEOS_SESSION_SCOPE:-}" = "projet" ]; then
+    # Niveau déduit du dossier de DÉMARRAGE, jamais écrit en dur : plusieurs postes, et
+    # le dossier personnel diffère. Les dépôts sont sous `~/` depuis le 2026-09-08 ; hors du
+    # dossier personnel, on retombe sur le chemin nu.
+    # LE DOSSIER DE DÉMARRAGE, PAS LE DOSSIER COURANT — corrigé le 2026-10-01, constaté par une
+    # session de projet. Le SessionStart se relance au compactage (matcher `compact`), et
+    # un hook tourne dans le dossier COURANT de Claude, qui suit ses `cd` (doc des hooks, vérifiée ce
+    # jour-là). Ce bloc lisait donc le niveau d'un sous-dossier : « pas d'ETAT.md », et l'ordre de
+    # monter un niveau DANS LE MOTEUR EXPORTÉ du gabarit. Dérivé vers un AUTRE niveau, il en aurait
+    # donné le périmètre d'écriture sans un signe. `CLAUDE_PROJECT_DIR` est « the project root where
+    # the session started » et « stays put » ; `PWD` ne sert plus que de repli s'il manque.
+    _proj="${CLAUDE_PROJECT_DIR:-$PWD}"
+    _lvl="${_proj#"$HOME"/}"
+    [ "$_lvl" = "$_proj" ] && _lvl="$_proj"
+    # BI-RÉGIME, posé le 2026-09-08 (geste 2.4). Le discriminant est NOMMÉ et il est
+    # observable : le niveau porte `ETAT.md` → il s'écrit par événements ; il n'en porte pas →
+    # il garde ses anciens fichiers d'état. Dire le mauvais périmètre d'écriture à une session
+    # de projet la fait écrire dans un fichier que le contrôle 24 refusera au commit.
+    # LA CIBLE DE LA REPRISE SUIT LE MÊME DISCRIMINANT QUE LE PÉRIMÈTRE D'ÉCRITURE, et elle doit :
+    # jusqu'au 2026-09-10 le bloc `CTX_FULL` plus bas écrivait EN DUR « tu remplis ${_hoff} et
+    # ${PWD}/MEMORY.md », sans condition, à douze lignes de ce `if` qui branche correctement. Une
+    # session de projet à `ETAT.md` recevait donc les DEUX consignes dans le même texte : son
+    # périmètre juste, puis l'ordre de remplir deux fichiers gelés. Le fichier se contredisait dans
+    # le même souffle. RAPPORTÉ SUR PIÈCE le 2026-09-10 par la session <APP>,
+    # qui s'en est sortie en DÉSOBÉISSANT au texte — pas parce que le texte était juste. Une session
+    # moins avertie écrit dans un gelé, se fait refuser au commit par le contrôle 14, et lève
+    # peut-être FORCE_GELE en croyant corriger un faux positif.
+    # Aucun des six contrôles de l'audit du 2026-09-10 n'avait ce fichier dans son périmètre : ils
+    # balaient les documents que l'agent lit, pas le texte qu'un script lui INJECTE.
+    if [ -f "$_proj/ETAT.md" ]; then
+        _ecrit="ton périmètre d'écriture est \`python3 ~/.claude/engine/etat.py add --niveau $_proj\`,
+et rien d'autre : ${_proj}/ETAT.md est une PROJECTION, l'éditer est refusé au commit (contrôle 23)."
+        _reprise_cible="tu écris tes événements par \`etat.py add\`, puis tu lances
+\`python3 ~/.claude/engine/etat.py projette --niveau $_proj\`. ${_proj}/MEMORY.md, s'il existe, est
+GELÉ : lecture seule, jamais écrit — le contrôle 14 refuse le commit."
+        _rep="${_proj}/ETAT.md et son journal \`journal/*.jsonl\`"
+    else
+        # PLUS AUCUN niveau vivant sans `ETAT.md` depuis le 2026-09-22 : un
+        # dossier qui n'en porte pas n'est pas encore un niveau. On le dit, on ne prescrit plus
+        # d'écrire un `MEMORY.md`.
+        _ecrit="Ce dossier ne porte PAS d'ETAT.md : ce n'est pas encore un niveau du système. Avant
+d'y écrire quoi que ce soit, le monter par la compétence \`nouveau-projet\`, qui crée son ETAT.md."
+        _reprise_cible="rien tant que le niveau n'est pas monté."
+        _rep="(aucune — ${_proj}/ETAT.md absent)"
+    fi
 
     CTX_FULL="=== ClaudeOS boot — session de PROJET ===
 ⟦CONSIGNE DE DÉMARRAGE — ne pas recopier telle quelle à l'écran⟧
 Tu es la session dédiée à ${_lvl}. Il n'y a pas de bilan système ici : ouvre ta première
 réponse par l'état de CE niveau, trois lignes au plus, depuis sa reprise.
-Ton périmètre d'écriture est ce dossier : ${_hoff} et ${PWD}/MEMORY.md.
+${_ecrit}
 Le global appartient à la session principale — règlement racine, mémoire racine,
 DESIGN.md, sauvegarde, synchronisation, boucle d'apprentissage, journal de session.
 Ce qui relève d'elle, remonte-le lui en une ligne ; elle l'écrit, pas toi.
-La sauvegarde et la synchronisation se lancent depuis la session principale seulement :
-deux sauvegardes concurrentes écrivent l'une par-dessus l'autre.
+Tu lui parles pour de vrai, ce n'est pas une note laissée sur un coin de table :
+\`ListAgents\` donne son nom, \`SendMessage\` lui porte le message.
+Tu POUSSES ton dossier toi-même, compétence \`pousser-son-dossier\` ; la CLÔTURE — contrôles,
+projection de tous les niveaux, synchronisation — reste à la session principale.
+Ta reprise : ${_reprise_cible} Puis tu pousses ton dossier. Une reprise écrite et non poussée
+disparaît au prochain travail fait depuis un autre poste.
 Puis enchaîne sur sa demande.
 
 --- NIVEAU ---
 ${_lvl}
-Reprise : ${_hoff} (${_hoff_st})
+Reprise : ${_rep}
 
 --- POUR ALLER PLUS LOIN ---
-État système, fils ouverts de tous les projets, sauvegarde : session principale."
+État système, fils ouverts de tous les projets, clôture : session principale."
 fi
+
+# --- L'installation inachevée (M-INACHEVEE), EN TÊTE, dans les deux portées ------------------
+# Plan complet de templating § 1.5, A6 (2026-10-01). Les trois tests se CALCULENT à chaque
+# démarrage, jamais stockés : `verifier.py inachevee` les porte avec le texte du message, ce bloc ne
+# fait que le relayer. Code propre au template, appelé en quelques lignes (A3, geste 7). Un échec du
+# vérificateur se DIT : un état d'installation non mesuré ne se lit pas comme une installation finie.
+_inach="$(python3 "$SELF/verifier.py" inachevee --message 2>&1)"; _rc_inach=$?
+case "$_rc_inach" in
+    0) _inach="" ;;
+    1) ;;
+    *) _inach="⚠ État de l'installation NON MESURÉ — engine/verifier.py inachevee a rendu ${_rc_inach} : $(printf '%s\n' "$_inach" | tail -n 1)" ;;
+esac
+[ -n "$_inach" ] && CTX_FULL="⟦À DIRE EN PREMIER, telle quelle, avant toute autre ligne⟧
+${_inach}
+
+${CTX_FULL}"
 
 python3 -c '
 import json, sys

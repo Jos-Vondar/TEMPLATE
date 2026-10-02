@@ -1,0 +1,21 @@
+# Jeu d'essai MAX — tout ce qui porte une règle à oui, un dépôt par domaine, les trois options.
+# 16 clés d'entretien plus PROXY (engine/config/REPONSES_CLES). Sert à l'épreuve et à la mesure :
+# mesure-personnalisation.py ratio et taille le lisent par défaut. Préfixes neutres, jamais ceux
+# d'un poste réel.
+GIT=par-domaine
+PREFIXES=CLIENT_,PERSO_
+PREFIXES_CLIENT=CLIENT_
+MULTIPOSTE=oui
+CONFIDENTIEL=oui
+LIVRABLE=oui
+MULTIDOMAINE=oui
+BILAN_DEMARRAGE=oui
+SKILLS_OPTION=writing-for-agents,grilling,domain-modeling
+SUPERVISION=oui
+SOLLICITATIONS=oui
+CONCISION=oui
+RIGUEUR_AFFICHEE=oui
+CODE_RELU=oui
+REGLES_A_FROID=oui
+DOCS_SUR_DEMANDE=oui
+PROXY=oui

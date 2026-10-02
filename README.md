@@ -1,130 +1,195 @@
-# Un système d'exploitation pour Claude Code
+# ClaudeOS
 
-Ce dépôt est un **squelette**. Il installe une configuration Claude Code qui se souvient, se sauvegarde, se vérifie et se corrige — puis il t'interroge pour la rendre tienne.
+![ClaudeOS : une décision prise en séance, retrouvée le lendemain](.github/media/claudeos.gif)
 
-Ce n'est pas la configuration de quelqu'un d'autre livrée telle quelle. Le contenu personnel en a été retiré : pas de nom de client, pas de projet, pas de métier, pas de persona. Ce qui reste, c'est la mécanique, et les règles qui ont une raison d'exister chez plus d'une personne.
+ClaudeOS est un système de travail pour Claude Code. Il donne à ton assistant un règlement que tu
+choisis, une mémoire qui survit d'une session à l'autre, un état par projet qui se reprend le
+lendemain sans relire la conversation, et une clôture qui sauvegarde le tout. Ce dépôt est un
+modèle : il ne contient la configuration de personne. L'installation te pose des questions, et ce
+que tu réponds décide du règlement que ton assistant chargera. Deux installations aux réponses
+différentes ne se ressemblent pas.
 
-## Ce que ça fait
+L'installation et la mise à jour sont menées par Claude Code lui-même, sur ton poste, par un agent
+livré avec le modèle. Elles consomment donc ton usage de Claude Code, comme n'importe quelle session.
 
-- **Sauvegarde** ta configuration et ton travail dans un dépôt git privé, à chaque fin de session, sans que tu y penses.
-- **Synchronise** tes machines par ce même dépôt.
-- **Refuse** de laisser partir ce qui ne doit pas partir : documents confidentiels, secrets, fichiers de données. Liste blanche, pas liste noire — tout est refusé par défaut, on autorise nommément.
-- **Se vérifie** avant chaque sauvegarde : 39 contrôles mécaniques, qui bloquent quand un défaut se désactiverait en silence et se contentent d'avertir quand il ne fait qu'encombrer.
-- **Se souvient** : mémoire par niveau, carte de rappel, journal de séances, fils ouverts, rappels datés — et un bilan de l'état du système injecté à l'ouverture de chaque session.
-- **Apprend** : une passe hebdomadaire relit ce qui s'est passé et propose des règles. Proposition, validation, écriture — jamais d'auto-règle.
-
-## Installer
-
-**Prérequis** : `git`, `rsync`, `curl`, `python3`, Claude Code, une identité git configurée, et **un dépôt git privé vide** qui servira de sauvegarde. Facultatif mais recommandé : `tmux`, pour les sessions de projet — section plus bas, rien d'autre n'en dépend.
-
-```bash
-git clone <ce-dépôt> claudeos-squelette
-cd claudeos-squelette
-bash install.sh
-```
-
-Le script demande l'URL de ton dépôt de sauvegarde, vérifie qu'il est clonable **et inscriptible** avant d'écrire quoi que ce soit, pose la machinerie, câble les déclencheurs de Claude Code, calibre ses alarmes sur ton corpus réel, et lance son autotest. Il s'arrête à la première étape qui échoue : un demi-système installé est pire qu'aucun, il a l'air de marcher.
-
-**Il installe aussi un outil tiers : `rtk`** ([github.com/rtk-ai/rtk](https://github.com/rtk-ai/rtk)), un proxy qui compresse la sortie des commandes courantes pour réduire le coût en jetons des sessions. Il vient de son dépôt à lui, par son script d'installation officiel (`curl | sh`), et il pose un déclencheur qui réécrit les commandes Bash prises en charge (`git status` devient `rtk git status`) avant exécution. Si l'installation échoue, tout le reste marche sans lui, à un coût plus élevé ; si tu n'en veux pas, retire de `~/.claude/settings.json` le hook dont la commande est `rtk hook claude`, et supprime le binaire. Il écrit aussi `~/.claude/RTK.md`, son propre fichier d'instruction, dans ton dossier de configuration — compté dans la couche chargée à chaque session, et réécrit à chaque mise à jour de l'outil. Si tu retires l'outil, retire ce fichier avec lui.
-
-Puis, dans Claude Code :
-
-```
-/plugin marketplace add anthropics/claude-plugins-official
-/plugin install superpowers@claude-plugins-official
-/claudeos-onboarding
-```
-
-L'entretien te demande qui tu es, sur quoi tu travailles et quel assistant tu veux. **C'est la moitié qui compte** : un script ne peut pas savoir qui il a en face. Il assemble ensuite ton fichier de règles en ne gardant que celles dont la condition est vraie chez toi, et finit par une première sauvegarde complète.
-
-### Une machine de plus
-
-Sur la nouvelle machine, le même `install.sh`, avec **la même URL de dépôt**. Il reconnaît un dépôt déjà habité et bascule seul : il récupère ta configuration au lieu d'en créer une. Il ne repose aucune question — les réponses sont dans le dépôt, et en produire une deuxième série créerait deux réponses à deux âges.
-
-### Passer à une nouvelle version
-
-Sans réinstaller, et sans perdre ce que tu as adapté :
-
-```bash
-bash ~/.claudeos/engine/update.sh --dry-run   # dit ce qu'il ferait, n'écrit rien
-bash ~/.claudeos/engine/update.sh             # applique
-```
-
-L'installation a enregistré une empreinte de chaque fichier qu'elle a posé. La mise à jour compare trois choses par fichier — cette empreinte, ton fichier d'aujourd'hui, celui de la nouvelle version — et c'est ce troisième point de comparaison qui rend l'opération sûre :
-
-- **tu n'y as jamais touché** → le fichier est remplacé, sans rien te demander ;
-- **tu l'as modifié** → tu vois le diff, tu décides, et **sans réponse ta version est conservée**.
-
-Ton fichier de règles, ta mémoire et tes dossiers de travail ne sont jamais touchés. Une mise à jour porte sur le moteur, les compétences et les styles de sortie — ce qui vient de ce dépôt, pas ce que tu as écrit.
-
-Un fichier que tu as choisi de garder reste marqué comme tien : on te le redemandera à la prochaine version au lieu de l'écraser en te croyant d'accord.
-
-Un fichier que la nouvelle version ne livre plus n'est **jamais supprimé sans ton accord** : la mise à jour te le montre, te propose la suppression, et sans réponse le conserve — en le consignant dans `~/.claudeos/engine/config/RETIRES_AMONT`, pour que tu saches ce que tu gardes et que plus rien ne route.
-
-**Si tu viens de la v1.1.0** : le premier passage réel s'interrompt sur une erreur de syntaxe après avoir copié les fichiers — c'est l'ancien `update.sh` qui se fait remplacer pendant qu'il tourne, un défaut de la v1.1.0 que la v2 corrige mais ne peut pas corriger rétroactivement. **Relance simplement la même commande** : le second passage, exécuté par le `update.sh` neuf, termine tout proprement — bilan, fichiers retirés, empreintes. L'essai à blanc ne montre pas cette interruption, puisqu'il n'écrit rien.
-
-`--ref v1.2.3` vise une version précise. Sans elle, c'est la dernière publiée — pas la pointe de la branche, qui peut porter du travail en cours.
-
-## Ce qu'il y a dedans
-
-| | |
-| :--- | :--- |
-| `install.sh` | L'amorçage. Déterministe, idempotent, s'arrête bruyamment. |
-| `engine/` | La machinerie : sauvegarde, synchronisation, autotest, bilan de démarrage, générateurs de mémoire. |
-| `system/CLAUDE.md` | Le règlement, livré en gabarit. L'entretien en retire les règles sans objet. |
-| `system/RULES_CATALOG.md` | Pour chaque règle : son énoncé, **le motif qui l'a fait naître**, et la condition sous laquelle elle mérite d'exister. |
-| `system/DESIGN.md` | Comment le système marche et pourquoi il marche ainsi. |
-| `system/skills/` | Les règles situationnelles en compétences — chargées sur déclencheur, pas à chaque session —, l'entretien d'installation, l'audit périodique, et une compétence d'interrogatoire empruntée. |
-| `system/output-styles/` | Un style de sortie en option, posé mais jamais activé d'office. |
-| `system-memory/` | Les registres de la mémoire, livrés vides avec leur mode d'emploi en tête : règles candidates, origines des règles, ratés de recherche, idées froides. |
-| `resources/` | Le gabarit de création d'un domaine de travail, cité par les règles. |
-
-## Trois choses à savoir avant de t'en servir
-
-**Tu hérites de règles que tu n'as pas méritées.** Chacune est née d'un incident précis, arrivé à quelqu'un d'autre. Une règle abstraite se respecte moins bien qu'un cas vécu : celles-ci tiendront mécaniquement moins bien chez toi. Le catalogue donne le motif de chaque règle — **une règle dont le motif ne te parle pas est une règle à retirer**, pas à subir. Le vrai remède est que tes propres incidents produisent tes propres règles.
-
-**Le corpus enseigne une voix.** Même vidé de son contenu, il est écrit dans un style dense et tranchant. Ton assistant en sera teinté quoi qu'il arrive. On ne peut pas l'éviter, on peut le savoir.
-
-**Ne saute pas la première sauvegarde.** Une installation qui n'a pas prouvé qu'elle sait sauvegarder n'est pas une installation, c'est une promesse.
-
-## Ce qui agit tout seul
-
-Trois comportements du même genre que l'installation de `rtk` : décidés pour toi, utiles, et faciles à manquer. Les voici, avec la sortie.
-
-- **Un lancement `claude` habillé.** La synchronisation ajoute à ton `~/.bashrc` une ligne qui source `engine/boot-wrapper.sh`, et ce wrapper définit une fonction `claude()` : taper `claude` sans argument ne lance plus l'outil nu, ça soumet d'office la question du bilan de démarrage. Les autres formes — `claude -p`, sous-commandes, arguments explicites — passent inchangées. Pour t'en défaire : retirer la ligne de `~/.bashrc` **et** l'étape 1 de `engine/SYNC_SETUP.sh`, sinon la prochaine synchronisation la repose.
-- **Une sortie réseau mensuelle au démarrage.** Un déclencheur de début de session lance `check_upstream_drift.sh`, qui interroge une fois par mois `raw.githubusercontent.com` pour comparer la compétence d'interrogatoire empruntée à son dépôt d'origine. Lecture seule, silencieux hors ligne, n'écrit jamais la compétence : il alerte, l'adoption reste ta décision. Pour t'en défaire : retirer ce déclencheur de `~/.claude/settings.json`.
-- **Un greffon réinstallé s'il manque.** À chaque synchronisation, si le greffon `superpowers` est absent, l'étape 2 de `engine/SYNC_SETUP.sh` le réinstalle d'elle-même — un appel réseau vers sa place de marché. C'est ce qui remet un poste en retard en état sans liste de gestes manuels. Si tu n'en veux pas, retirer cette étape en plus du greffon, sinon elle gagnera.
-
-## Un style de sortie en option : ELI5
-
-L'installation pose `~/.claude/output-styles/eli5.md` et n'y touche plus. Il n'est **pas activé** : ce squelette ne te livre pas la configuration de quelqu'un d'autre, et une voix imposée serait exactement ça. Il est fourni parce qu'il rend service — les jours où tu n'as plus la tête à lire des réponses d'ingénieur.
-
-Activé, il fait répondre Claude en mots simples et phrases courtes : ce qui a été fait, si ça a marché, ce que tu dois faire — chemins de fichiers et commandes exacts, le reste élagué. Le comportement de codage, lui, ne change pas.
-
-Pour l'allumer : `/config` dans Claude Code, choisir **Output style**, sélectionner **ELI5**. Ce menu écrit le choix dans `.claude/settings.local.json` du projet courant ; pour l'avoir partout, pose plutôt `"outputStyle": "ELI5"` dans `~/.claude/settings.json`. Effet au prochain `/clear` ou à la prochaine session, pas avant. Retour en arrière : le style **Default**, au même endroit.
-
-## Les sessions de projet vivent dans tmux
-
-tmux fait tourner des terminaux **à l'intérieur** d'un terminal : tu fermes la fenêtre, la session continue de tourner, tu la retrouves intacte en te rattachant. C'est tout ce qu'il faut savoir pour s'en servir ici.
-
-Ce système s'en sert pour les sessions Claude Code de projet : une session par projet, nommée d'après son dossier, qui survit à la fermeture du terminal et à une coupure SSH — et que l'assistant peut ouvrir lui-même, sans dépendre d'un éditeur installé.
-
-```bash
-bash ~/.claudeos/engine/session-open.sh <projet>   # ouvre la session du projet (nom, fragment ou chemin)
-bash ~/.claudeos/engine/session-open.sh --main     # la session principale : bilan de démarrage, sauvegarde
-bash ~/.claudeos/engine/session-open.sh --list     # ce qui tourne
-bash ~/.claudeos/engine/session-open.sh --close <nom>
-tmux attach -t <nom>                               # s'attacher ; se détacher : Ctrl+b puis d
-```
-
-Une session de projet ne sauvegarde pas et ne porte pas le global : c'est le rôle de la principale, et c'est voulu — une seule session écrit, les autres travaillent. Sans tmux installé, rien de tout ça n'existe et rien d'autre ne casse.
-
-## Entretenir
-
-Une fois par semaine, dans Claude Code : `os audit`. Il relit le système, confronte ce qu'il affirme à ce qui existe, et rend une liste de correctifs par lots. Il ne corrige rien de lui-même.
-
-Le reste tourne sans toi : la sauvegarde à chaque fin de session, l'autotest avant chaque sauvegarde, le bilan à chaque ouverture.
+- [Partie 1 — Installer](#partie-1--installer)
+- [Partie 2 — Mettre à jour](#partie-2--mettre-à-jour)
 
 ---
 
-*Squelette extrait d'un système en service. Le contenu personnel a été retiré par un générateur qui contrôle sa propre sortie — noms propres, chemins de machine, liens vers des documents absents. Ce qui reste est de la mécanique et des règles ; ce qui te concerne, tu l'écriras toi-même.*
+## Partie 1 — Installer
+
+### Ce qu'il te faut
+
+ClaudeOS vise macOS et WSL. Il est éprouvé sous macOS. Sous WSL, il est supporté mais non éprouvé :
+l'agent d'installation lit la plateforme et adapte une commande qui échoue sur ton poste. Les autres
+systèmes ne sont pas supportés.
+
+Toutes les installations demandent les outils suivants. La commande de droite dit si ton poste les a.
+
+| Outil | Pourquoi | Contrôle |
+| :--- | :--- | :--- |
+| Claude Code 2.1.281 ou plus récent | l'agent d'installation en a besoin | `claude --version` |
+| `python3` 3.8 ou plus récent, avec FTS5 | le moteur, et l'index de recherche | `python3 -c "import sqlite3; sqlite3.connect(':memory:').execute('create virtual table t using fts5(x)')"` |
+| `tmux` | une session par projet | `tmux -V` |
+| `curl` | télécharger les compétences optionnelles | `curl --version` |
+
+Si tu gardes ton système sur GitHub (voir ci-dessous), il te faut aussi :
+
+| Outil | Pourquoi | Contrôle |
+| :--- | :--- | :--- |
+| un compte GitHub | tes dépôts privés | — |
+| `git` | l'historique et la sauvegarde | `git --version` |
+| `gh`, authentifié | créer et contrôler tes dépôts privés | `gh auth status` |
+
+Tu n'as rien à installer d'avance. L'agent fait ce contrôle au début, avec
+`python3 engine/verifier.py prerequis`, et te donne la commande qui installe ce qui manque. Tu peux
+aussi suivre la documentation officielle de chaque outil :
+[Claude Code](https://code.claude.com/docs/en/setup),
+[GitHub CLI](https://github.com/cli/cli#installation),
+[git](https://git-scm.com/downloads), [tmux](https://github.com/tmux/tmux/wiki/Installing),
+[Python](https://www.python.org/downloads/).
+
+> **Tu as déjà une V1 ou une V2 ?** Ne suis pas cette partie : va à la
+> [Partie 2](#depuis-une-v1-ou-une-v2), qui garde ta version actuelle intacte jusqu'au bout.
+
+### Trois façons de garder ton système
+
+L'agent te demande laquelle tu veux, pendant l'installation.
+
+- **Un dépôt par domaine**, le choix par défaut : `~/.claude` et chacun de tes domaines de travail
+  sont des dépôts GitHub privés. Tout est sauvegardé à chaque clôture, et un second poste est
+  possible.
+- **Un dépôt unique** : tout va dans le dépôt privé de `~/.claude`, tes domaines compris.
+- **Sans git, tout local** : rien ne sort de ton poste. Le prix est un seul poste, aucun historique
+  ni retour arrière, et la perte du poste perd tout. Passer ensuite de ce régime à GitHub n'est pas
+  prévu dans cette version.
+
+### Récupérer le modèle
+
+Pour un régime GitHub, clique sur « Use this template », crée le dépôt en **privé**, puis clone-le :
+
+```
+gh repo clone <ton-compte>/<ton-depot> ~/claudeos-amorce
+```
+
+Pour le régime sans git, ou si tu préfères laisser l'agent créer ton dépôt privé, prends l'archive
+d'une version, listée sur la [page des versions](https://github.com/Jos-Vondar/TEMPLATE/tags), et
+extrais-la :
+
+```
+mkdir ~/claudeos-amorce
+curl -L https://github.com/Jos-Vondar/TEMPLATE/archive/refs/tags/<version>.tar.gz \
+  | tar -xz --strip-components=1 -C ~/claudeos-amorce
+```
+
+### Lancer l'agent
+
+```
+cd ~/claudeos-amorce
+claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur
+```
+
+En mode auto, un classificateur de Claude Code juge à ta place les gestes de l'agent, et
+`installateur/settings.installation.json` autorise d'avance les scripts du moteur qu'il enchaîne. Il
+peut encore t'interrompre une ou deux fois, surtout pour une écriture dans `~/.claude`, que Claude Code
+n'approuve jamais de lui-même : accepte-la, c'est là que l'agent installe le système.
+
+À la plomberie, l'agent te donne une ligne à ajouter à ton `~/.zshrc`, ou à ton `~/.bashrc` sous
+WSL : c'est elle qui lance le démarrage de ClaudeOS à chaque session. C'est toi qui l'ajoutes.
+
+L'agent commence par cinq points à connaître pour se servir du système : la clôture, la reprise,
+une session par projet, le contexte et `/compact`, ce qui sort de ton poste. Chacun se termine par
+une question, et rien ne s'installe tant que les cinq ne sont pas passés. Ensuite viennent les
+prérequis, le choix du régime, puis la plomberie : `~/.claude` devient ton système en place, sans
+que soit touché ce que Claude Code y range lui-même. Un `CLAUDE.md` qui existait avant est copié à
+l'écart, et ses règles te seront proposées. L'agent confirme avec toi chaque écriture qui sort de ton
+poste, comme une création de dépôt ou un envoi, et chaque suppression.
+
+**L'entretien** vient ensuite, souvent dans une seconde séance. L'agent y pose les questions qui
+font ton règlement : jusqu'où ton assistant te contredit, s'il demande avant d'agir, la forme de ses
+réponses, tes domaines de travail. Il écrit ton persona avec toi. Une rubrique sur laquelle tu n'as
+pas d'avis est retirée, et non remplie par défaut. L'installation se termine par un premier domaine
+de travail, une vraie clôture, puis une vraie reprise.
+
+**Tant que tout n'est pas réglé, l'installation se déclare inachevée.** Chaque démarrage de session
+le dit en tête, et nomme ce qui manque : une réponse, une marque « à remplir » restée dans ton
+`CLAUDE.md`, ou la première sauvegarde (la première clôture, en régime sans git). Relance l'agent
+pour reprendre là où tu t'étais arrêté.
+
+### La sauvegarde se fait à la clôture
+
+Rien n'est sauvegardé en fin de session. La sauvegarde a lieu quand tu clos ta séance dans la
+session principale (« on arrête »). Celle-ci demande d'abord aux sessions de projet ouvertes si
+elles ont fini d'écrire, puis projette l'état de chaque niveau, passe ses contrôles et, en régime
+GitHub, envoie chaque dépôt. Une séance close sans clôture reste sur ton poste, non sauvegardée.
+
+### Une machine de plus
+
+En régime GitHub, clone ton dépôt privé dans `~/claudeos-amorce` sur la nouvelle machine, puis lance
+l'agent comme ci-dessus. Il reconnaît un dépôt qui porte déjà tes réponses et ne te repose aucune
+question. Le régime sans git ne permet qu'un poste.
+
+### Une limite connue : Cowork
+
+Dans l'application de bureau, une session Cowork saute tout import d'un fichier utilisateur qui
+sort de son dossier de travail. Le règlement que ton `~/.claude/CLAUDE.md` importe n'y est donc pas
+chargé. Claude Code en terminal le charge.
+
+---
+
+## Partie 2 — Mettre à jour
+
+### Ce qu'une version touche, et ce qu'elle ne touche jamais
+
+Le modèle possède ce qu'une version change : `engine/`, `noyau/`, `gabarits/`, `installateur/`, les
+compétences livrées sous `skills/`, ce fichier et la licence. Ne les modifie pas : la version
+suivante les remplace, et une modification locale y devient un conflit. La liste exacte, fichier par
+fichier, est dans `engine/PERIMETRE_TEMPLATE`.
+
+Tout le reste est à toi, et aucune version n'y touche : ton `CLAUDE.md` (sauf le bloc d'imports
+entre ses deux marqueurs, que le moteur réécrit depuis tes réponses), tes réponses et réglages sous
+`reglages/`, ta mémoire sous `memory/`, ton journal et ton état, tes dossiers de travail. Tes
+propres règles vont dans la section « Mes règles » de ton `CLAUDE.md`.
+
+### Depuis une V3
+
+Les versions sont des étiquettes de ce dépôt. Pour passer à une version neuve, relance l'agent : il
+lit ton régime et mène la mise à jour.
+
+- **En régime GitHub**, depuis ton système : `cd ~/.claude && claude --permission-mode auto --agent claudeos-installateur`.
+  L'agent fusionne la version par git depuis ce dépôt, posé comme `upstream` à l'installation, et
+  résout avec toi un conflit sur un fichier que tu as modifié.
+- **Sans git**, extrais l'archive de la nouvelle version dans une amorce neuve, comme dans
+  « Récupérer le modèle », et lance l'agent depuis elle. Il compare chaque fichier livré à ce qui
+  avait été livré : un fichier que tu n'as pas touché est remplacé, un fichier que tu as modifié
+  t'est montré, et rien n'est écrasé sans ta réponse.
+
+### Depuis une V1 ou une V2
+
+Ne lance pas l'`update.sh` de ta version : la version 3 n'a aucun chemin en commun avec les
+précédentes, et ce script refusera de la poser. Le passage se fait par une installation neuve, que
+l'agent mène en mode migration.
+
+1. Fais une dernière sauvegarde de ta version actuelle, puis ferme toutes tes sessions Claude Code.
+2. Récupère la version 3 dans `~/claudeos-amorce` et lance l'agent, comme dans la Partie 1.
+3. L'agent reconnaît ta version. Il la met en quarantaine intacte dans `~/.claudeos-v2-quarantaine/`
+   et peut l'y restaurer à l'octet tant que la version 3 n'est pas posée. Puis il installe la
+   version 3, reprend tes réponses, ton persona, ton routage et ta mémoire, et ne te pose que les
+   questions que ta version ne connaissait pas.
+4. Tes règles ajoutées à la main, tes compétences modifiées et tes domaines te sont proposés un par
+   un. Rien n'est repris sans ton accord.
+5. Ton ancienne version et son dépôt de sauvegarde ne sont rangés en archive qu'à la fin, après au
+   moins une séance complète sur la version 3, et chacun sur ta confirmation. Rien n'est supprimé.
+
+---
+
+**Compétences empruntées.** Trois compétences sont proposées en option à l'entretien :
+`writing-for-agents`, `grilling` et `domain-modeling`. Elles viennent du dépôt
+[mattpocock/skills](https://github.com/mattpocock/skills), sous licence MIT. Ce dépôt ne les
+redistribue pas : elles sont téléchargées à l'installation, à un commit fixé dans
+`engine/config/SKILLS_AMONT`, avec leur licence, puis complétées par une surcouche propre à
+ClaudeOS. Les choisir demande donc un accès au réseau.
+
+**Licence.** MIT, voir `LICENSE`. Elle couvre le code de ce dépôt et les surcouches ClaudeOS des
+compétences empruntées ; le corps de ces compétences reste sous la licence de son dépôt d'origine.

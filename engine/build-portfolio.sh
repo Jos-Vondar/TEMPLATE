@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# À LA DEMANDE SEULEMENT depuis le 2026-08-22 — retiré de la passe hebdomadaire (geste 9
+# d'`HYGIENE.md`), décision de l'utilisateur après l'audit contradictoire. Motif : aucun script
+# ne lit sa sortie, et le fichier n'avait été ouvert qu'une fois sur un mois. Le lancer quand la
+# question « qu'a-t-on livré » se pose, pas par calendrier.
 # =============================================================================
 # BUILD PORTFOLIO — ClaudeOS
 # Génère `memory/PORTFOLIO.md` : ce qu'on a PRODUIT, et le fil du temps par projet.
@@ -9,21 +13,35 @@
 #
 # INTÉGRALEMENT GÉNÉRÉ, jamais édité à la main : tout est dérivé des noms de fichiers,
 # des titres et du journal de session. Un registre tenu à la main ne serait pas tenu.
-# Régénéré à chaque sauvegarde, comme le squelette de l'index de rappel.
+# Régénéré à la passe hebdomadaire, par la fiche d'hygiène (geste 9) — plus à chaque
+# sauvegarde depuis le 2026-08-05. Commentaire corrigé le 2026-08-22 : il affirmait l'ancienne cadence.
 # =============================================================================
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
 
 OUT="$MEM/PORTFOLIO.md"
 
-python3 - "$MEM" "$(claudeos_ws_roots)" "$OUT" "$(date +%Y-%m-%d)" <<'PYEOF'
-import os, re, sys, glob, collections
+python3 - "$MEM" "$(claudeos_ws_roots)" "$OUT" "$(date +%Y-%m-%d)" "$REG" <<'PYEOF'
+import os, re, sys, glob, collections, fnmatch
 
-MEM, OUT, TODAY = sys.argv[1], sys.argv[3], sys.argv[4]
-# Racines des workstations dérivées du MANIFESTE depuis le 2026-08-09 (claudeos_ws_roots),
-# une par ligne, au lieu de `$HOME/workstations` en dur : une workstation déclarée ailleurs
-# était sauvegardée sans jamais entrer au portfolio, et rien ne l'aurait signalé.
+MEM, OUT, TODAY, REG = sys.argv[1], sys.argv[3], sys.argv[4], sys.argv[5]
+# Racines des dossiers de travail : `claudeos_ws_roots`, une par ligne, jamais en dur — un
+# dossier déclaré ailleurs serait sauvegardé sans jamais entrer au portfolio, sans un mot.
 ROOTS = [r for r in sys.argv[2].splitlines() if r.strip()]
+
+def lignes(nom):
+    """Les lignes utiles d'un réglage de `reglages/`, facultatif : [] s'il manque."""
+    try:
+        with open(os.path.join(REG, nom), encoding='utf-8') as f:
+            return [l.strip() for l in f if l.strip() and not l.lstrip().startswith('#')]
+    except OSError:
+        return []
+
+# Les documents de référence de métier : `reglages/DOCS_REFERENCE`, un nom ou un motif par
+# ligne. Ils portent leur version en tête, pas une date dans leur nom.
+REFERENCES = lignes('DOCS_REFERENCE')
+def est_reference(name):
+    return any(fnmatch.fnmatch(name, m) for m in REFERENCES)
 H = os.path.expanduser('~')
 
 # ---------------------------------------------------------------- livrables --
@@ -41,8 +59,8 @@ def kind(path, name):
     if '/specs/' in p or name.lower().startswith('spec'): return 'spécification'
     if '/plans/' in p: return "plan d'implémentation"
     if '/rapports/' in p or REPORT.search(name): return 'rapport périodique'
-    if name == 'DESIGN.md': return "conception d'app"
-    if name in ('DESIGN.md'): return 'référence de conception'
+    if est_reference(name): return 'document de référence'
+    if name in ('DESIGN.md', 'SYSTEM_DESIGN.md'): return 'référence de conception'
     n = name.lower()
     if 'feasibility' in n or 'faisabilite' in n: return 'note de faisabilité'
     if n.startswith('rfc'): return 'RFC'
@@ -81,7 +99,7 @@ for root in ROOTS:
     m = DATED.search(name) or REPORT.search(name)
     if m:
         date = m.group(1)
-    elif name == 'DESIGN.md':
+    elif est_reference(name):
         date = ''                       # daté par son en-tête de version, pas par son nom
     else:
         continue
@@ -90,10 +108,10 @@ for root in ROOTS:
                   'title': title_of(path, name), 'path': os.path.relpath(path, H),
                   'scope': f'{dom}/{proj}' if proj else dom})
 
-# Les conceptions d'app n'ont pas de date de nom : on prend la version de leur en-tête.
+# Les documents de référence n'ont pas de date de nom : on prend la version de leur en-tête.
 VER = re.compile(r'V?(\d+\.\d+(?:\.\d+)?)')
 for it in items:
-    if it['kind'] == "conception d'app":
+    if it['kind'] == 'document de référence':
         try:
             head = open(os.path.join(H, it['path']), encoding='utf-8').readline()
         except OSError:
@@ -111,7 +129,14 @@ for root in ROOTS:
     for d in sorted(glob.glob(f'{root}/*')):
         if os.path.isdir(d) and not os.path.basename(d).startswith('_'):
             projects[f'{os.path.basename(root)}/{os.path.basename(d)}'] = [os.path.basename(d)]
+# LES ALIAS se lisent dans `reglages/ALIAS`, une ligne `<clé>: alias1, alias2` : ils rattachent
+# à un projet des sessions qui le nomment autrement. La clé est calculée comme plus haut,
+# `basename(racine)/basename(dossier)` — une clé qui n'existe pas créerait un projet fantôme.
 ALIAS = {}
+for l in lignes('ALIAS'):
+    cle, _, reste = l.partition(':')
+    if cle.strip() and reste.strip():
+        ALIAS[cle.strip()] = [a.strip() for a in reste.split(',') if a.strip()]
 for k, v in ALIAS.items():
     projects.setdefault(k, []).extend(v)
 
@@ -130,9 +155,11 @@ MAX = 12   # par projet : au-delà, on compte le reste plutôt que de tout déro
 # ------------------------------------------------------------------- sortie --
 L = ['# PORTFOLIO — ce qu\'on a produit, et quand',
      '',
-     f'> **Généré le {TODAY} par `engine/build-portfolio.sh`. Ne pas éditer à la main** —',
+     f'> **Snapshot au {TODAY}, par `engine/build-portfolio.sh`. Ne pas éditer à la main** —',
      "> tout est dérivé des noms de fichiers, des titres et du journal de session ; une",
-     '> édition manuelle serait écrasée à la prochaine sauvegarde.',
+     "> édition manuelle serait perdue à la régénération. Il ne se régénère PAS tout seul —",
+     "> aucun script ne l'appelle, le geste a quitté la passe hebdomadaire le 2026-08-22 :",
+     '> le relancer à la demande, quand la question se pose.',
      '>',
      "> Ce que ce fichier répond : « qu'est-ce qu'on a produit », « où on en est sur ce projet",
      "> depuis le début ». Ce qu'il ne répond pas : la valeur ou l'état de validité d'un livrable —",

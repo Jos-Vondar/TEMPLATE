@@ -1,0 +1,7 @@
+# IDENTITÉ GIT DU POSTE — `reglages/IDENTITE_GIT`, à toi, suivie par ton dépôt privé.
+# Souche livrée VIDE ici, dans `gabarits/` ; l'agent d'installation la recopie dans `reglages/`
+# et te la fait remplir. Lue par `engine/install-poste.sh`, qui la pose dans `git config --global`
+# sans jamais écraser une identité déjà en place. Tant qu'une valeur reste vide, le démarrage
+# dit l'installation inachevée. Sourcée par bash : une affectation par ligne, rien d'autre.
+GIT_NOM=""
+GIT_EMAIL=""

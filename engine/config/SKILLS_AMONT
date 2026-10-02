@@ -1,0 +1,22 @@
+# SKILLS_AMONT — les compétences optionnelles et leur source : SEULE source de l'épinglage (plan
+# complet de templating § 1.4, qui reprend le plan V3 § 1.4 ; `d-skills-amont`). Écrit le
+# 2026-10-01, A5. Lu par `engine/skills-amont.sh`. Le corps d'un emprunt n'est jamais redistribué :
+# il se télécharge à l'installation depuis son dépôt, AU COMMIT ÉPINGLÉ, jamais `main`. Sinon
+# l'amont dérive sous la surcouche qui le surcharge.
+#
+# Colonnes, séparées par des espaces : NOM  DÉPÔT  COMMIT  CORPS  VOISINS  LICENCE
+#   NOM      le dossier `skills/<NOM>/` composé ; les mêmes noms, ni plus ni moins, que les valeurs
+#            permises de SKILLS_OPTION dans `engine/config/REPONSES_CLES` (le script le contrôle) ;
+#            sa surcouche est `gabarits/skills/<NOM>/SURCOUCHE.md`.
+#   DÉPÔT    propriétaire/dépôt, sur GitHub.
+#   COMMIT   40 caractères hexadécimaux.
+#   CORPS    chemin du SKILL.md dans le dépôt amont.
+#   VOISINS  fichiers du même dossier amont, copiés tels quels, séparés par des virgules ; `-` si
+#            aucun.
+#   LICENCE  chemin de la licence dans le dépôt amont, copiée en `skills/<NOM>/LICENSE.amont`.
+#
+# Changer un COMMIT est un report : recomposer en essai (`skills-amont.sh --essai`), puis relire le
+# corps neuf sous la surcouche qu'il reçoit.
+writing-for-agents  mattpocock/skills  f054defc3f694558dbd1f418cd9046057594283b  skills/productivity/writing-for-agents/SKILL.md  SKILL-MECHANICS.md  LICENSE
+grilling            mattpocock/skills  85f83d3fde1d3a90d5c9a657f6998c79a6c37308  skills/productivity/grilling/SKILL.md  -  LICENSE
+domain-modeling     mattpocock/skills  54bc6b604075c18293d38e9e294a2c96f365f104  skills/engineering/domain-modeling/SKILL.md  ADR-FORMAT.md,CONTEXT-FORMAT.md  LICENSE
