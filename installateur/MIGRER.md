@@ -30,7 +30,8 @@ nomme.
 
 ## M1 — L'amorce et le lancement
 
-L'amorce est posée et l'agent lancé, comme pour une installation (`INSTALLER.md`, I0 et I1).
+L'amorce est posée et l'agent lancé, comme pour une installation (README, Partie 1, puis
+`INSTALLER.md`, I1).
 `verifier.py mode` a rendu `migrer` : montre-lui les traces. Puis I2, la lecture obligée
 (`ACCUEIL.md`).
 

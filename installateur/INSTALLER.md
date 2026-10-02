@@ -1,7 +1,7 @@
 # Installer — d'un poste sans ClaudeOS à un système qui est le sien
 
-Procédure de l'agent, mode `installer` (`LANCEMENT.md`). Neuf phases, I0 à I8 ; la personne a déjà
-fait I0 et I1. **Chaque phase se clôt sur son vérificateur, et tu ne passes pas à la suivante sans
+Procédure de l'agent, mode `installer` (`LANCEMENT.md`). Huit phases, I1 à I8 ; la personne a déjà
+récupéré le modèle et lancé l'agent (README, Partie 1). **Chaque phase se clôt sur son vérificateur, et tu ne passes pas à la suivante sans
 lui.** Ses bornes, ses questions et ses confirmations sont celles de `LANCEMENT.md`.
 
 Jusqu'à la plomberie, les scripts se lancent depuis l'amorce, `~/claudeos-amorce` : `python3
@@ -20,8 +20,11 @@ de poser.
   alors la section « Machine de plus », en bas : aucune question n'est reposée.
 - **Une installation neuve**, sinon.
 
-`~/.claude` déjà dépôt git : la trace le dit. Ne pose rien, demande ce qu'il porte et ce qu'elle veut
-en faire.
+`~/.claude` déjà dépôt git : la trace le dit. Ne pose rien, et dis **M-DEPOT-EXISTANT**, avec son
+distant s'il en a un : « Ton `~/.claude` est déjà un dépôt git (<distant, ou « sans distant »>).
+ClaudeOS doit en faire son propre dépôt. Range le tien hors du système, par exemple
+`mv ~/.claude/.git ~/.claude-avant-claudeos/$(date +%Y%m%d)-git`, puis relance l'agent. Rien n'a été
+écrit. » C'est elle qui le déplace ; arrête-toi là.
 
 ## I2 — La lecture obligée
 
@@ -54,6 +57,8 @@ description de chacune porte son texte, mot pour mot.
 - **Sans git, tout local** : « rien ne sort de ce poste. Le prix : un seul poste, aucun historique
   ni retour arrière, et si ce poste est perdu, tout est perdu. Passer ensuite de sans git à GitHub
   n'est pas prévu dans cette version. »
+
+Sa réponse s'écrit en I5 par sa valeur : `par-domaine`, `unique` ou `aucun`, et aucune autre.
 
 Pour un régime GitHub, `python3 engine/verifier.py prerequis --regime github` doit rendre `0`.
 Si l'amorce est une archive et non un clone, il faut d'abord un dépôt privé. Crée-le, après
@@ -97,7 +102,7 @@ dans cet ordre : chacun suppose le précédent.
 
        Le `checkout` refuse d'écraser un fichier non suivi : c'est voulu, ne le force jamais. Les
        fichiers qu'il nomme sont à la personne. Demande-lui de les ranger dans
-       `~/.claude-avant-claudeos/$T/`, puis relance-le.
+       `~/.claude-avant-claudeos/<date>/`, le dossier du geste 1 s'il existe, puis relance-le.
      - `git -C ~/.claude status --porcelain` ne doit lister aucun dossier de l'outil.
    - **Sans git.**
 
@@ -119,8 +124,11 @@ dans cet ordre : chacun suppose le précédent.
 5. **Le règlement** : `cp ~/.claude/gabarits/CLAUDE.md ~/.claude/CLAUDE.md`. Ce fichier est désormais
    à la personne ; seul son bloc d'imports s'écrit par script, à l'entretien.
 6. **Les réglages** : `python3 ~/.claude/engine/fusionner-reglages.py`. Si `autoMemoryDirectory`
-   vise déjà un autre dossier, rien n'est écrit. Expose l'écart et demande-lui : sa mémoire
-   automatique vivra-t-elle sous `~/.claude/memory` ?
+   vise déjà un autre dossier, rien n'est écrit : ClaudeOS range sa mémoire sous `~/.claude/memory`,
+   et ne fonctionne pas sans elle. Expose l'écart, puis demande-lui :
+   - **Oui** : c'est elle qui change la clé dans `~/.claude/settings.json`, et qui déplace sa mémoire
+     si elle veut la garder. Puis relance le script.
+   - **Non** : l'installation s'arrête là. Dis-lui que ses réglages n'ont pas été touchés.
 7. **Le poste** : `bash ~/.claude/engine/install-poste.sh`. Lis chaque ligne qu'il rend. Sans git, il
    marque la racine et pose la référence de départ des empreintes : il vient donc après les gestes
    qui écrivent l'état livré.
@@ -175,12 +183,14 @@ se fait en vrai.
 3. **Les astuces** restent : le fragment les a posées dans `settings.json`. Chacune revient de
    plus en plus rarement, à son rythme ; les retirer, c'est ôter `spinnerTipsOverride` de
    `settings.json`.
-4. **L'amorce** : propose de supprimer `~/claudeos-amorce`, et ne le fais qu'après confirmation. En
-   GitHub, son dépôt garde tout. Sans git, l'état livré, sous `~/.claude/.claudeos/livre/`, garde la
-   copie de la version : une version suivante arrivera dans une amorce neuve, et
-   `METTRE_A_JOUR.md` la comparera à cette copie.
 
-**Fin** : `python3 ~/.claude/engine/verifier.py arrivee` rend `0`. Dis alors **M-FIN-INSTALL** :
+**Fin** : `python3 ~/.claude/engine/verifier.py arrivee` rend `0`.
+
+Puis **l'amorce**, en dernier : c'est le dossier où tourne cette session. Propose de supprimer
+`~/claudeos-amorce`, et ne le fais qu'après confirmation. En GitHub, son dépôt garde tout. Sans git,
+l'état livré, sous `~/.claude/.claudeos/livre/`, garde la copie de la version : une version suivante
+arrivera dans une amorce neuve, et `METTRE_A_JOUR.md` la comparera à cette copie. Dis enfin
+**M-FIN-INSTALL** :
 « ClaudeOS est installé, et réglé par toi. Ouvre ta session principale par `cd ~/.claude && claude`,
 et un projet par `bash ~/.claude/engine/claudeos-session.sh <projet>`. « On arrête » clôture et
 sauvegarde ; `/claudeos-onboarding` rejoue l'entretien quand ta situation change. Ferme cette
@@ -208,7 +218,14 @@ avec le motif de **M-REGIME** : rien ne synchronise deux postes sans dépôt.
      ceux dont le nom porte un préfixe de `PREFIXES` et propose de les cloner sous `~/<NOM>`, la
      liste confirmée d'un bloc.
    - En dépôt unique, `~/.claude/travail/` est venu avec le dépôt.
-4. **Les compétences optionnelles** : `bash ~/.claude/engine/skills-amont.sh` refait le cache des
+4. **Les gardes des dépôts clonés** : relance `bash ~/.claude/engine/install-poste.sh`. Lancé en I5,
+   il ne voyait pas encore ces dépôts : sans lui, ils n'ont ni crochet ni pilote de fusion des
+   journaux, et la première clôture les refuse.
+5. **Les compétences optionnelles** : `bash ~/.claude/engine/skills-amont.sh` refait le cache des
    emprunts, qui ne voyage pas.
 
 **Fin** : `verifier.py plomberie`, puis `verifier.py arrivee`, à `0` tous les deux. Puis **M-FIN-INSTALL**.
+
+**Reprise.** Une machine de plus interrompue après I5 rend le mode `v3` au lancement suivant : ses
+réponses et son règlement viennent déjà du dépôt. Si la personne dit « machine de plus », reprends à
+l'étape 3, sans reposer aucune question.

@@ -50,8 +50,9 @@ description: Monter un domaine d'activité entier — son dépôt git en régime
 6. **Si `CONFIDENTIEL=oui`, créer le réceptacle `_IGNORE/`, un seul, au niveau qui porte le projet** :
    `mkdir -p "$D/<Projet>/_IGNORE"`. Jamais au niveau d'une app, et le contrôle hebdomadaire 28bis
    refuse un réceptacle sous un autre.
-7. **Router le domaine** — une ligne dans la table « Mes domaines » du `CLAUDE.md` racine : ce
-   qu'il couvre, son dossier, et en remarque le savoir-faire lié s'il y en a un.
+7. **Router le domaine**, quand `MULTIDOMAINE=oui` — une ligne dans la table « Mes domaines » du
+   `CLAUDE.md` racine : ce qu'il couvre, son dossier, et en remarque le savoir-faire lié s'il y en a
+   un. À `non`, l'entretien a retiré cette section : rien à router.
 8. **Router le projet** — une ligne dans « Routing Projets » du `CLAUDE.md` du domaine. Un
    projet non routé a des instructions que rien ne charge.
 9. **Lier le savoir-faire de métier**, s'il existe — lien symbolique **relatif**, jamais une copie :
@@ -71,10 +72,15 @@ description: Monter un domaine d'activité entier — son dépôt git en régime
 11. **Inscrire le domaine au niveau système, par un événement `pointeur`** — `etat.py add --niveau .
     --type pointeur --op ajoute` depuis `~/.claude`, puis `projette`.
 12. **Ce qui sort du poste.**
-    - `par-domaine` — **créer le distant et pousser, POINT D'ARRÊT.** Présenter `git ls-files | wc -l`
-      et les vingt plus gros fichiers suivis. Sur feu vert seulement, et **privé toujours** — le
-      contenu nomme les clients partout :
-      `gh repo create "$(gh api user --jq .login)/<NOM>" --private --source="$D" --remote=origin --push`
+    - `par-domaine` — **committer, créer le distant et pousser, POINT D'ARRÊT.** Mettre en file,
+      `git -C "$D" add -A`, puis présenter `git -C "$D" ls-files | wc -l` et les vingt plus gros
+      fichiers suivis. Sur feu vert seulement, le premier commit — le crochet passe ses alarmes —,
+      puis le distant, **privé toujours** : le contenu nomme les clients partout. `gh repo create
+      --push` refuse un dépôt sans commit.
+      ```bash
+      git -C "$D" commit -m "<NOM> : création du domaine"
+      gh repo create "$(gh api user --jq .login)/<NOM>" --private --source="$D" --remote=origin --push
+      ```
     - `unique` — rien à créer : le domaine part avec le dépôt du système à la prochaine clôture.
     - `aucun` — rien ne sort : la clôture contrôle sans rien envoyer.
 13. **Écrire la reprise** : deux sources de vérité du système viennent de changer (`reprise`).

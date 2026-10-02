@@ -29,12 +29,25 @@ Procédure de l'agent, mode `v3`, quand la personne veut la version suivante (`L
 
 ### En GitHub
 
-```bash
-git -C ~/.claude merge <tag>
-```
+1. **L'ascendance, une seule fois.** Le dépôt venu du bouton n'a aucun ancêtre commun avec le
+   template. Fusionné sans elle, chaque fichier que la version change sortirait en conflit, ceux
+   qu'elle n'a jamais touchés compris. La version installée se lit dans `~/.claude/engine/VERSION`.
+   Si `git -C ~/.claude merge-base --is-ancestor v<installée> HEAD` rend `1`, pose son étiquette
+   comme ancêtre, sans changer aucun fichier :
 
-- **La première fois**, le dépôt venu du bouton n'a aucun ancêtre commun avec le template :
-  `git -C ~/.claude merge --allow-unrelated-histories <tag>`.
+   ```bash
+   git -C ~/.claude merge -s ours --allow-unrelated-histories --no-edit \
+     -m "ClaudeOS : ascendance du template v<installée>" v<installée>
+   ```
+
+   Contrôle : `git -C ~/.claude diff --stat HEAD~1 HEAD` ne rend rien. Si `merge-base --is-ancestor`
+   rend `0`, l'ascendance est déjà posée : passe au geste 2.
+2. **La version** :
+
+   ```bash
+   git -C ~/.claude merge v<visée>
+   ```
+
 - **Un conflit ne porte que sur un fichier qu'elle a touché.** Résous-le avec elle, fichier par
   fichier, les deux versions montrées. Ne prends jamais la version neuve en bloc.
 - **Un conflit sur un fichier du template** est une retouche locale, par exemple un correctif WSL.

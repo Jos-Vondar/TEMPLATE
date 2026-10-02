@@ -1,11 +1,7 @@
 # gitattributes-journal — le pilote de fusion des journaux d'événements.
-# Posé le 2026-09-08, geste 2.3 du plan `plans-systeme/2026-09-09-plan-implementation-unifie.md`.
-# `install-poste.sh` l'inscrit en `core.attributesFile` sur chaque dépôt de `claudeos_repos`.
-#
-# ÉCART DE NOM assumé : le plan l'appelle `gitattributes-documents`, par symétrie avec son voisin
-# `gitignore-documents`. Ce suffixe est un héritage du monodépôt `DOCUMENTS`, qui n'existe plus —
-# et ce fichier-ci s'applique à TOUS les dépôts, le système compris, qui porte lui aussi un
-# journal. Un nom qui promet un périmètre qu'il n'a pas coûte plus que la symétrie.
+# Posé le 2026-09-08. `install-poste.sh` l'inscrit en `core.attributesFile` sur chaque dépôt de
+# `claudeos_repos` : il s'applique à TOUS les dépôts, le système compris, qui porte lui aussi un
+# journal.
 #
 # CE QUE `union` FAIT, et il faut le savoir avant de s'en servir : sur un conflit, il garde les
 # lignes DES DEUX CÔTÉS au lieu de s'arrêter. Sur un journal append-only c'est le comportement

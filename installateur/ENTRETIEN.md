@@ -117,7 +117,8 @@ Même mécanisme, autre sujet : deux appels, quatre questions chacun. Pose chacu
   réponse par un bilan — poste à jour ou non, tableau d'état, dernière séance, rappels et fils
   ouverts — suivi d'une proposition de travail pour la journée ? Ou qu'il réponde directement ? »
   - `non` retire l'état des lieux, la proposition et le relais des rappels et des fils, qu'il faudra
-    aller chercher. Seule la dette de sécurité reste signalée.
+    aller chercher. Restent signalés la dette de sécurité et ce qui menace la sauvegarde : un dépôt
+    qui ne pousse plus, un retard, un distant injoignable.
   - Ne l'oriente pas, mais n'en cache rien : ce bilan est le cœur de ce que le système ajoute à
     l'outil nu.
 
@@ -150,7 +151,9 @@ avec ses mots. Les options ne portent que des issues sans valeur :
 - **« Rien de particulier »** retire la rubrique : son titre, son commentaire et sa marque. **Sauf
   Identité**, qui ne se retire pas.
 - **« Plus tard »** laisse la marque, et tu dis que l'installation reste inachevée tant qu'elle
-  survit.
+  survit. Le vérificateur de l'entretien l'avertit sans bloquer : l'installation va jusqu'au
+  premier domaine et à la répétition, et seule l'arrivée attend la réponse. Identité n'a pas cette
+  issue.
 - En mode rejouer : **« Garder tel quel »**.
 
 | Rubrique | Question-guide |
@@ -265,7 +268,7 @@ de session. La reprise au fil de l'eau et la clôture sont la compétence `repri
 2. Dis ce qui a été écrit, et où : `reglages/REPONSES`, le `CLAUDE.md` — persona, domaines, règles,
    bloc d'imports —, les compétences composées et le journal du système.
 3. Dis que l'entretien se rejoue quand la situation change : `/claudeos-onboarding`, ou l'agent
-   livré, `cd ~/.claude && claude --permission-mode auto --agent claudeos-installateur`.
+   livré, `cd ~/.claude && claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur`.
 4. **En mode installation**, reviens à `INSTALLER.md`, I7. **En mode rejouer**, ce qui a changé
    partira à la prochaine clôture.
 

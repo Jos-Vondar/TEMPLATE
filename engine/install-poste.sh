@@ -32,7 +32,7 @@ SYS="$HOME/.claude"
 # PORTABILITÉ, 2026-09-12 : `mapfile` n'existe qu'à partir de bash 4.0, et macOS livre le 3.2.
 # Sous lui, `mapfile: command not found` puis `set -u` fait échouer la première lecture du tableau —
 # le script ne fait RIEN. L'idiome `while read` ci-dessous est POSIX : il tourne à l'identique sous
-# bash 3.2, bash 5 et le WSL. C'est celui que `controle-secrets.sh` l.48 employait déjà.
+# bash 3.2, bash 5 et le WSL. C'est celui qu'employait déjà `controle-secrets.sh` pour remplir `_WS`.
 _DEPOTS=(); while IFS= read -r _d; do [ -n "$_d" ] && _DEPOTS+=("$_d"); done < <(claudeos_repos)
 HOOK_SRC="$SELF/hooks/pre-commit-alarmes.sh"
 SHIM_TAIL="$CLAUDEOS_SHIM_TAIL"   # source unique : config.sh
@@ -67,7 +67,7 @@ else
 # L'URL de chaque dépôt est celle que git connaît : aucun fichier ne la recopie. Poser le dépôt
 # système la première fois est le geste de l'agent d'installation, pas de ce script.
 if [ ! -d "$SYS/.git" ]; then
-    warn "~/.claude n'est pas un dépôt git — c'est l'agent d'installation qui le pose : claude --permission-mode auto --agent claudeos-installateur"
+    warn "~/.claude n'est pas un dépôt git — c'est l'agent d'installation qui le pose : claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur"
 fi
 for _d in "${_DEPOTS[@]}"; do
     if [ -d "$_d/.git" ] && [ -z "$(git -C "$_d" remote 2>/dev/null)" ]; then

@@ -88,9 +88,38 @@ case "$TOOL" in
     # théorique, il s'est produit le jour même de la pose.
     # LEVIER TRACÉ, sur le modèle de `FORCE_GELE` : préfixer la commande de
     # `FORCE_NO_VERIFY="motif"` lève le refus et laisse le motif dans l'historique du shell.
+    # SES ÉQUIVALENTS AUSSI, depuis l'audit de la v3.0.0 : `git commit -n`, un groupe d'options qui
+    # porte `n` (`-nm`), `--no-verify` abrégé (`--no-veri`), et `-c core.hooksPath=…` devant la
+    # sous-commande. Le motif d'avant ne voyait que la forme longue. On lit segment par segment :
+    # un `grep -n` ailleurs dans la commande n'est pas un commit.
     if [ "$SURFACE_OK" = 1 ] \
-       && printf '%s' "$SURFACE" | grep -qE 'git([[:space:]]+[^[:space:]]+)*[[:space:]]+(commit|push)' \
-       && printf '%s' "$SURFACE" | grep -qE '(^|[[:space:]])(--no-verify)([[:space:]]|$)' \
+       && SURF="$SURFACE" python3 -c '
+import os, re, shlex, sys
+for seg in re.split(r"\|\||&&|;|\||\n", os.environ["SURF"]):
+    try:
+        t = shlex.split(seg)
+    except ValueError:
+        t = seg.split()
+    if "git" not in t:
+        continue
+    t = t[t.index("git") + 1:]
+    i, opts = 0, []
+    while i < len(t) and t[i].startswith("-"):
+        if t[i] in ("-c", "-C") and i + 1 < len(t):
+            opts.append((t[i], t[i + 1])); i += 2
+        else:
+            i += 1
+    if i >= len(t) or t[i] not in ("commit", "push"):
+        continue
+    if any(o == "-c" and v.lower().startswith("core.hookspath") for o, v in opts):
+        sys.exit(0)
+    for a in t[i + 1:]:
+        if a.startswith("--no-veri"):
+            sys.exit(0)
+        if t[i] == "commit" and re.fullmatch(r"-[A-Za-z]*n[A-Za-z]*", a):
+            sys.exit(0)
+sys.exit(1)
+' \
        && ! printf '%s' "$SURFACE" | grep -qE 'FORCE_NO_VERIFY='; then
         python3 -c '
 import json
@@ -98,7 +127,7 @@ print(json.dumps({"hookSpecificOutput":{
   "hookEventName":"PreToolUse",
   "permissionDecision":"deny",
   "permissionDecisionReason":(
-    "REFUS — `--no-verify` desactive TOUT le crochet de commit en silence : le refus 23 sur une "
+    "REFUS — `--no-verify`, `-n` ou un core.hooksPath detourne desactivent TOUT le crochet de commit en silence : le refus 23 sur une "
     "projection desynchronisee, le 24 sur un fichier gele, et la detection de secret. Ce que le "
     "crochet allait refuser ne se sait pas en le contournant. Geste attendu : relancer SANS le "
     "drapeau, lire ce qui est refuse, et traiter la cause. Si le contournement est assume, le "

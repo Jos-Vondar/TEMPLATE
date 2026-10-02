@@ -183,8 +183,8 @@ _h3=$(grep -rlE -- 'projects/-(home|Users|c|mnt)[A-Za-z0-9_-]*/' "$_CMD" "$HOME/
 # compte : posé avant, ce chemin aurait fait crier le contrôle dès la première passe sur ce que
 # A7 corrige, et une alarme qui naît rouge s'apprend à être ignorée. Ce qu'il gardait ne
 # gardait rien : le fichier est SUIVI, donc il voyage, et son bloc `autoMode.environment`
-# nommait le dossier personnel de l'AUTRE poste comme dépôt de confiance — 35 entrées, dont
-# un dépôt client privé et un hôte de service en ligne. Le périmètre est le fichier SUIVI et lui seul :
+# nommait le dossier personnel de l'AUTRE poste comme dépôt de confiance, dépôts privés compris.
+# Le périmètre est le fichier SUIVI et lui seul :
 # `settings.local.json` est dans le `.gitignore`, ne voyage pas, et n'a rien à respecter ici.
 # Un chemin de dossier personnel dans le fichier suivi est un défaut d'où qu'il vienne — il
 # criera donc sur les deux postes, et c'est voulu.
@@ -263,7 +263,7 @@ done
 # `$HOME/.claude/plugins` — `plugins` n'est pas un lien, donc pas de défaut. On ne vise donc que les
 # points de départ qui SONT une racine liée : `"$HOME/.claude"` terminé là, `"$HOME"/<PRÉFIXE>*`, ou une
 # variable de racine. MESURÉ APRÈS RESSERRAGE : zéro signalement sur les scripts du moteur.
-# PLUS DE `grep -P` — retiré le 2026-09-25, signalé par la session CLAUDE_OS_TEMPLATE. Le grep de
+# PLUS DE `grep -P` — retiré le 2026-09-25, signalé par une session de projet. Le grep de
 # macOS refuse `-P` (« invalid option -- P », rc=2) : le `if` passait alors au VERT sans rien lire,
 # et le garde ne tenait que parce que le grep GNU de brew est en tête du PATH. Le lookahead
 # `(?!-L)` devient deux `grep -E` : les lignes `find` partant d'une racine liée, puis celles qui
@@ -512,7 +512,7 @@ out = []
 # d'archive s'éteint à la première lecture. Avec les trois : 1 dans `memory/`, 0 ailleurs.
 #   (i)   vivant seulement — un en-tête de gel ou `ARCHIVE` dans le nom sort le fichier ;
 #   (ii)  chemins qui DOIVENT exister sur ce poste — sous `~/.claude/` ou sous un dépôt client.
-#         Les fiches d'auto-mémoire décrivent la seedbox et le Mac : un chemin distant n'est pas
+#         Les fiches d'auto-mémoire décrivent d'autres machines : un chemin distant n'est pas
 #         un chemin mort, et crier dessus serait un faux à demeure ;
 #   (iii) pour les scripts, hors lignes de commentaire — elles racontent des chemins morts à
 #         dessein, c'est même leur fonction (« ce dossier a disparu le … »).
@@ -780,7 +780,10 @@ _noign=$(find -L "${_WS[@]}" -mindepth 1 -maxdepth 1 -type d \
     2>/dev/null | while read -r d; do
         [ -d "$d/_IGNORE" ] && continue
         _p=$(dirname "$d"); _cv=0
-        while [ "$_p" != "$HOME" ] && [ "$_p" != "/" ]; do
+        # La remontée s'arrête aussi à `~/.claude` : en dépôt unique et sans git, les dossiers de
+        # travail vivent sous `travail/`, et le `_IGNORE/` de la racine du système — celui de
+        # l'index de recherche — couvrait alors tous les projets (audit de la v3.0.0).
+        while [ "$_p" != "$HOME" ] && [ "$_p" != "/" ] && [ "$_p" != "$HOME/.claude" ]; do
             [ -d "$_p/_IGNORE" ] && { _cv=1; break; }
             _p=$(dirname "$_p")
         done
@@ -798,8 +801,8 @@ echo "[selftest] 28bis. Réceptacle confidentiel REDONDANT sous un autre (averti
 # CONTRÔLE INVERSE du 28, ajouté le 2026-08-17 (lot D de l'audit du jour). Le 28 vérifie qu'un
 # réceptacle EXISTE à la racine de chaque projet ; personne ne vérifiait qu'il n'en existe PAS
 # ailleurs. C'est l'angle mort qui a laissé sept dossiers `_IGNORE/` vivre au niveau des apps,
-# dont quatre peuplés de douze fichiers client — le règlement l'interdit nommément (§3.2, « jamais
-# au niveau d'une app ») et rien ne le signalait. Rangés le même jour, ce contrôle est ce qui
+# dont plusieurs peuplés de documents — la règle de rangement l'interdit nommément (« jamais au
+# niveau d'une app ») et rien ne le signalait. Rangés le même jour, ce contrôle est ce qui
 # empêche la redégradation : sans lui, le prochain dépôt recrée le défaut en silence.
 #
 # POURQUOI ÇA COMPTE, et ce n'est pas cosmétique : un `_IGNORE/` est hors sauvegarde. Un document
@@ -831,7 +834,7 @@ else
 # placé ne se traitent pas pareil : le premier se supprime, le second se déménage après
 # classement — et rien ne se supprime dans un `_IGNORE/` sans classement.
 _misign=$(find -L "${_WS[@]}" -mindepth 2 -type d -name "_IGNORE" 2>/dev/null | while read -r d; do
-        # un réceptacle au-dessus de celui-ci ? On remonte de parent en parent jusqu'à la
+        # un réceptacle au-dessus de celui-ci ? On remonte de parent en parent jusqu'au
         # domaine : `find` seul ne sait pas exprimer « sous un autre dossier de même nom ».
         _p=$(dirname "$d"); _couvert=0
         # La garde `$HOME/workstations` est tombée avec la bascule du 2026-09-08 : les dépôts
@@ -840,7 +843,7 @@ _misign=$(find -L "${_WS[@]}" -mindepth 2 -type d -name "_IGNORE" 2>/dev/null | 
         # « déjà couvert » tous les `_IGNORE/` du parc d'un coup.
         while [ "$_p" != "$HOME" ] && [ "$_p" != "/" ]; do
             _p=$(dirname "$_p")
-            [ "$_p" = "$HOME" ] && break
+            { [ "$_p" = "$HOME" ] || [ "$_p" = "$HOME/.claude" ]; } && break   # même borne qu'au 28
             [ -d "$_p/_IGNORE" ] && { _couvert=1; break; }
         done
         [ "$_couvert" = "1" ] && echo "${d#$HOME/} ($(find -L "$d" -type f 2>/dev/null | wc -l | tr -d ' ') fichier(s), déjà couvert par ${_p#$HOME/}/_IGNORE)"
@@ -975,7 +978,7 @@ _routes=0
 # Noms de dossiers qui relèvent de la CONVENTION et non du routage : les citer n'est pas
 # promettre qu'ils existent. `_IGNORE/` a déjà son propre contrôle (#28) — le compter ici
 # ferait crier deux contrôles pour un seul défaut.
-_conventions="_IGNORE docs scripts specs plans extracted src tools assets rapports base-documentaire msapp"
+_conventions="_IGNORE docs scripts specs plans extracted src tools assets rapports"
 while IFS= read -r _cm; do
     _dir="$(dirname "$_cm")"
     # SEULEMENT les lignes de TABLEAU. Première version : tout dossier entre guillemets

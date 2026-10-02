@@ -75,7 +75,8 @@ le poste : les transcriptions de Claude Code, les caches, les identifiants, et c
 réceptacle des documents qui ne doivent pas sortir. Sans git, rien ne sort. Un secret ne s'écrit
 jamais dans un fichier suivi : le crochet de commit le refuse.
 
-**Question** : « Tu as choisi GitHub. Qu'est-ce qui part sur ton dépôt privé à la clôture ? »
+**Question** : « Si tu gardes ton système sur GitHub, qu'est-ce qui part sur ton dépôt privé à la
+clôture ? »
 - a) Seulement le code du moteur.
 - b) Rien : GitHub ne sert qu'aux mises à jour.
 - c) Tout ce que ClaudeOS tient, sauf ce que la liste noire exclut : transcriptions, caches,

@@ -31,10 +31,10 @@ change pas.
 
 ## Étapes
 
-1. **Établir le domaine et le nom du projet.** Manquants → `AskUserQuestion`, la
+1. **Établir le domaine et le nom du projet.** Manquants → `AskUserQuestion`, le
    domaine d'abord, le nom ensuite. Les domaines sont ceux de la table « Mes
    domaines » du `CLAUDE.md` racine, et `claudeos_ws_roots` (`engine/config.sh`) en donne les
-   dossiers ; les proposer telles quelles, ne pas les deviner. Le nom du dossier suit les
+   dossiers ; les proposer tels quels, ne pas les deviner. Le nom du dossier suit les
    conventions de la compétence `fichiers-et-nommage`.
 
 2. **Vérifier que le dossier n'existe pas.** S'il existe, s'arrêter et demander : c'est

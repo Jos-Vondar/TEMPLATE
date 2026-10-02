@@ -29,7 +29,7 @@ source "$_CFG"
 # PORTABILITÉ, 2026-09-12 : `mapfile` n'existe qu'à partir de bash 4.0, et macOS livre le 3.2.
 # Sous lui, `mapfile: command not found` puis `set -u` fait échouer la première lecture du tableau —
 # le script ne fait RIEN. L'idiome `while read` ci-dessous est POSIX : il tourne à l'identique sous
-# bash 3.2, bash 5 et le WSL. C'est celui que `controle-secrets.sh` l.48 employait déjà.
+# bash 3.2, bash 5 et le WSL. C'est celui qu'employait déjà `controle-secrets.sh` pour remplir `_WS`.
 DEPOTS=(); while IFS= read -r _d; do [ -n "$_d" ] && DEPOTS+=("$_d"); done < <(claudeos_repos)
 ETAT_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/etat.py"
 JOURNAL_KO=0
@@ -97,13 +97,22 @@ for D in "${DEPOTS[@]}"; do
         else
             while IFS= read -r NIV; do
                 [ -n "$NIV" ] || continue
-                if ! OUT=$(python3 "$ETAT_PY" check --niveau "$D/$NIV" 2>&1); then
+                OUT=$(python3 "$ETAT_PY" check --niveau "$D/$NIV" 2>&1); _rc=$?
+                # Le geste dépend du CODE : un 23 n'est qu'une projection en retard sur un journal
+                # fusionné, qu'une projection répare ; seul un 22 appelle la réécriture du journal.
+                # Elle était prescrite sur TOUT échec (audit de la v3.0.0).
+                if [ "$_rc" -ne 0 ]; then
                     printf '  ⛔ %-28s JOURNAL EN DÉFAUT au niveau %s — ARRÊT\n' "$NOM" "$NIV"
                     printf '%s\n' "$OUT" | sed 's/^/       /'
-                    echo "       Le geste : garder l'événement le plus RÉCENT, retirer l'autre par un"
-                    echo "       commit qui porte le motif. C'est la seule réécriture licite d'un"
-                    echo "       journal, et le crochet la refuse — lève-le en le nommant :"
-                    echo "         FORCE_JOURNAL=\"doublon de fusion, id <...>\" git commit …"
+                    case "$_rc" in
+                        23) echo "       ETAT.md est en retard sur son journal fusionné. Le geste : reprojeter, puis committer :"
+                            echo "         python3 \"$ETAT_PY\" projette --niveau \"$D/$NIV\"" ;;
+                        22) echo "       Le geste : garder l'événement le plus RÉCENT, retirer l'autre par un"
+                            echo "       commit qui porte le motif. C'est la seule réécriture licite d'un"
+                            echo "       journal, et le crochet la refuse — lève-le en le nommant :"
+                            echo "         FORCE_JOURNAL=\"doublon de fusion, id <...>\" git commit …" ;;
+                        *)  echo "       etat.py check a rendu $_rc : la cause est dans sa sortie, ci-dessus." ;;
+                    esac
                     RC=1; JOURNAL_KO=$((JOURNAL_KO + 1))
                 fi
             done < <(git -C "$D" ls-files -- '*.jsonl' \

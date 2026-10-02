@@ -42,14 +42,14 @@ description: "Grille d'écriture de tout document qu'un agent lit — CLAUDE.md,
 >
 > **Un plafond, un quota, une limite, une valeur numérique nomme son UNITÉ dans la phrase qui le pose.** Sans elle le nombre est obéi à la lettre sur la mauvaise grandeur, et **le défaut est invisible à la relecture** : il n'y a ni erreur, ni écart de conduite, ni trace. Il ne se voit qu'en demandant « trois **quoi** ».
 >
-> **Corollaire, et c'est lui qui mord le plus** : ni le préfixe, ni le nom, ni le libellé d'un champ ne disent son unité. `MT_` ne dit pas « euros ». Et **un modèle qui reçoit un nombre sans unité répond quand même**, avec aplomb.
+> **Corollaire, et c'est lui qui mord le plus** : ni le préfixe, ni le nom, ni le libellé d'un champ ne disent son unité. Un préfixe de colonne ne dit pas « euros ». Et **un modèle qui reçoit un nombre sans unité répond quand même**, avec aplomb.
 >
 > **Cinq occurrences, quatre niveaux, aucune du même domaine.**
 > 1. Un prompt disait « trois au maximum » en comptant des **produits** quand l'unité voulue était le **montage** — l'utilisateur ne voyait que deux propositions, et le modèle obéissait parfaitement.
 > 2. L'en-tête du `MEMORY.md` d'une app justifiait son plafond en **mots** quand la mesure est en **caractères** : une justification entière calibrée sur la mauvaise grandeur.
 > 3. Trois en-têtes voisins du même parc portaient le même défaut.
 > 4. **L'audit lui-même l'a payé** : trois nombres ont circulé pour un seul fichier — 131 310 (octets), 126 701 (caractères), 123 704 (caractères hors commentaires HTML, le seul que le contrôle mesure). Un sous-agent a annoncé des octets en les appelant caractères, dans la passe dont la grille nomme ce piège.
-> 5. **Avec dégât métier, celle-là** : une colonne de base de données était en **milliers d'euros** et aucun des sept prompts de la chaîne ne le disait — les écrans affichaient « 960 € » pour 960 000 €, et le facteur 1 000 faussait une éligibilité qui dépendait de ce montant.
+> 5. **Avec dégât métier, celle-là** : une colonne de base de données était en **milliers d'euros** et aucun des sept prompts de la chaîne ne le disait — les écrans affichaient un montant mille fois trop petit, et ce facteur faussait une éligibilité qui en dépendait.
 >
 > **L'objection « trop évidente pour être écrite » est examinée et écartée** : la règle a été payée cinq fois malgré son évidence, dont trois fois par ce système sur ses propres plafonds et une fois par l'audit chargé de la traquer.
 
@@ -63,7 +63,7 @@ description: "Grille d'écriture de tout document qu'un agent lit — CLAUDE.md,
 > - **Un fil, une dette, un rappel** se nomme sur le **symptôme**, et sa cause supposée vit dans le corps, **marquée comme hypothèse**. Exiger les deux : un intitulé purement symptomatique est plus dur à retrouver.
 > - **Une mention « hors périmètre »** — « ajouté par un tiers », « configuré côté client », « alimenté par le flux » — dit **ce que le tiers ajoute ET que ça doit exister à la livraison**. Sinon le bloc échappe au contrôle, y compris à un relecteur automatique qui a pourtant chargé la fiche.
 >
-> **Trois occurrences, trois niveaux.** Le fil `[#anciennete-divisee-par-365]` accusait la division ; la division était juste, c'était l'unité du `DateDiff` — **7 jours** ouvert sur le mauvais terme. Une fiche de format rangeait un tableau d'effectif hors périmètre en le donnant pour « ajouté par la rédaction du site » : la présentation est partie sans lui, ni la session ni son relecteur ne l'ont vu manquer. Et un rappel a été **reconduit cinq fois sur trois semaines** en désignant un guide de licences qui ne portait aucune des deux réponses attendues.
+> **Trois occurrences, trois niveaux.** Un fil accusait la division d'un calcul d'ancienneté ; la division était juste, c'était l'unité de la fonction de date — **7 jours** ouvert sur le mauvais terme. Une fiche de format rangeait un tableau hors périmètre en le donnant pour « ajouté par un tiers » : le document est parti sans lui, ni la session ni son relecteur ne l'ont vu manquer. Et un rappel a été **reconduit cinq fois sur trois semaines** en désignant un guide de licences qui ne portait aucune des deux réponses attendues.
 
 > ### Le décalage entre deux prompts d'une chaîne ne casse rien et rend faux
 >

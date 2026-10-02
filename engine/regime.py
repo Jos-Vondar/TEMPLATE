@@ -44,6 +44,9 @@ LA RACINE : celle du dépôt git s'il y en a un, sinon le plus proche ancêtre q
                                par choix à la dernière mise à jour (une ligne `gardé<tab>chemin`
                                chacun) ; sinon les écarts, une ligne `absent|modifié<tab>chemin`
                                chacun (rc=1)
+  garde <racine> <chemin>      inscrit dans GARDES l'état actuel d'un fichier livré que la personne
+                               garde différent de sa version : le correctif WSL sur place que
+                               LANCEMENT.md autorise. rc=1 si le fichier égale sa version livrée
 
 L'ÉTAT LIVRÉ, sous `<racine>/.claudeos/livre/` (plan complet § 1.9 et A8) : `MANIFESTE`, une ligne
 `<sha256>  <chemin>` par fichier livré, triée — la forme de `shasum -a 256`, que
@@ -83,8 +86,10 @@ TETE_MAX = 200          # la première ligne gardée, en caractères : assez pou
 LIVRE = os.path.join(DOSSIER, "livre")
 LIVRE_ARBRE = "ARBRE.tar.gz"
 LIVRE_GARDES = "GARDES"
-# Ce qu'une amorce porte sans le livrer : son propre dépôt, l'état d'un système, et le bruit ordinaire.
-LIVRE_HORS = {".git", DOSSIER, "__pycache__", ".DS_Store"}
+# Ce qu'une amorce porte sans le livrer : son propre dépôt, l'état d'un système, le bruit ordinaire,
+# et `.github/`, qui ne sert qu'à la page du dépôt — son GIF de 4,7 Mo entrait dans `~/.claude`, puis
+# une seconde fois dans la copie livrée (audit de la v3.0.0).
+LIVRE_HORS = {".git", DOSSIER, "__pycache__", ".DS_Store", ".github"}
 
 
 class Refus(Exception):
@@ -465,6 +470,29 @@ def livre_ecarts(rac):
     return ecarts, len(livre), tenus
 
 
+def garde(rac, rel):
+    """Inscrit dans GARDES l'état actuel d'un fichier livré, que la personne garde différent de sa
+    version livrée. Rend cet état, ou None si le fichier égale sa version : rien à garder. Refuse
+    un chemin que l'état livré ne connaît pas. Sans cette inscription, un correctif sur place
+    rendait la plomberie non conforme pour toujours (audit de la v3.0.0)."""
+    livre = livre_lit(rac)
+    if not livre:
+        raise Refus(f"aucun état livré sous {os.path.join(rac, LIVRE)}")
+    if rel not in livre:
+        raise Refus(f"{rel} n'est pas un fichier livré : rien à garder.")
+    p = os.path.join(rac, rel)
+    etat = "absent" if not os.path.isfile(p) else _sha_fichier(p)
+    if etat == livre[rel]:
+        return None
+    gardes = livre_gardes(rac)
+    gardes[rel] = etat
+    g = os.path.join(rac, LIVRE, LIVRE_GARDES)
+    with open(g + ".neuf", "w", encoding="utf-8") as fh:
+        fh.write("".join(f"{gardes[r]}  {r}\n" for r in sorted(gardes)))
+    os.replace(g + ".neuf", g)
+    return etat
+
+
 def livre_arbre(rac):
     """{chemin: octets} de la copie livrée ; None si elle manque. Une archive illisible REFUSE."""
     import tarfile
@@ -645,6 +673,20 @@ def main(argv):
             return 1
         print(f"[regime] livré : {copies} fichier(s) copié(s), {egaux} déjà en place à l'identique ; "
               f"état livré écrit → {os.path.join(rac, LIVRE)}")
+        return 0
+    if cmd == "garde":
+        if len(args) != 2:
+            raise Refus("garde <racine> <chemin> : deux arguments.")
+        cible = os.path.realpath(os.path.join(rac, args[1])) if not os.path.isabs(args[1]) \
+            else os.path.realpath(args[1])
+        rel = os.path.relpath(cible, rac).replace(os.sep, "/")
+        if rel == ".." or rel.startswith("../"):
+            raise Refus(f"{args[1]} n'est pas sous la racine {rac}.")
+        etat = garde(rac, rel)
+        if etat is None:
+            print(f"[regime] {rel} égale sa version livrée : rien à garder.", file=sys.stderr)
+            return 1
+        print(f"[regime] écart gardé : {rel} ({etat[:12]}) → {os.path.join(rac, LIVRE, LIVRE_GARDES)}")
         return 0
     if cmd == "livre":
         ecarts, n, tenus = livre_ecarts(rac)

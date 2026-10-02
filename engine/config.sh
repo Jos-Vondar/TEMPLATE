@@ -135,19 +135,19 @@ claudeos_lock() {
 # commit des deux dépôts. Deux copies à deux âges divergent, et c'est alors le plus
 # silencieux des deux qui devient muet sans que rien ne le dise.
 #
-# FORMES — préfixes imposés par les éditeurs (AWS, GitHub, GitLab, Google, Slack, clé PEM).
+# FORMES — préfixes imposés par les éditeurs (AWS, GitHub, GitLab, Google, Slack, Anthropic, clé PEM).
 # Tous ont une casse EXACTE, donc à comparer SANS l'option d'insensibilité : comparer sans la
 # casse ne rattrape aucun secret réel et fait sonner n'importe quel bloc base64 (sur quelques
 # centaines de kilo-octets, 'akia' suivi de seize caractères alphanumériques sort par hasard —
 # ce qui a bloqué la sauvegarde du 2026-07-27 sur des images intégrées).
-CLAUDEOS_SECRET_RE_FORMES='(-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|glpat-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|xox[baprs]-[A-Za-z0-9-]{10,})'
+CLAUDEOS_SECRET_RE_FORMES='(-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|glpat-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-ant-[A-Za-z0-9_-]{20,})'
 # MOTS — un mot-clé suivi d'une valeur. Ici la casse varie selon qui écrit le fichier, donc
 # l'insensibilité est utile et se garde.
 CLAUDEOS_SECRET_RE_MOTS='(api[_-]?key|secret|password|passwd|token)[^[:alnum:]]{1,4}[A-Za-z0-9/+_.=-]{20,}'
 # NOMS — le nom du fichier annonce un secret, même si aucune ligne ne matche les deux
-# précédents (trou par lequel un fichier de clé nue a fui le 2026-07-03).
+# précédents : une clé nue, seule dans son fichier, n'a ni mot-clé ni forme connue.
 CLAUDEOS_SECRET_NAME_RE='(secret|passw(or)?d|credential|api[._-]?key|[._-]token)'
-# DONNÉES TEXTE — le vecteur des fuites du 2026-07-03. Remonté ici du hook le 2026-08-24 :
+# DONNÉES TEXTE — un export ou un journal partirait sans un mot. Remonté ici du hook le 2026-08-24 :
 # la clôture pose désormais la MÊME question avant de committer, pour mettre ces fichiers de
 # côté au lieu de laisser l'alarme bloquer la sauvegarde. Deux lecteurs, donc un seul motif.
 # Pas de liste blanche : elle serait muette, et c'est ce qui a fait entrer un binaire en 2026-08.
@@ -253,8 +253,7 @@ claudeos_repos() {
 . "$SELF/lib_regime.sh"
 
 # --- Plafonds de taille et cliquet de croissance — SOURCE UNIQUE ---------------
-# Posés le 2026-09-07, palier 0 du plan de consolidation
-# (`~/.claude/plans-systeme/2026-09-05-plan-consolidation.md`, seule source du raisonnement).
+# Posés le 2026-09-07.
 # Lus par `hooks/pre-commit-alarmes.sh`, contrôles 8, 9 et 10. Un seul endroit :
 # `DESIGN.md` § « Plafonds » renvoie ICI et ne porte aucun chiffre, et l'en-tête d'un
 # fichier borné porte un renvoi, jamais une valeur — deux copies à deux âges se
@@ -342,7 +341,7 @@ claudeos_plafond_de() {
 # citent, et une installation neuve ne les porte pas encore : le contrôle hebdomadaire 27 les compte à
 # part au lieu de les crier. Trois n'existent jamais dans un régime donné : `RTK.md` sans proxy, les
 # empreintes de clôture en régime GitHub, l'identité git sans git. Un chemin qui finit par `/` vaut pour
-# tout ce qu'il contient. Mesuré sur trois installations d'essai, `outils/banc-agent.sh`.
+# tout ce qu'il contient. Mesuré sur trois installations d'essai.
 CLAUDEOS_CHEMINS_AU_BESOIN='~/.claude.json ~/.claude/audits/ ~/.claude/memory ~/.claude/memory/ ~/.claude/plans/ ~/.claude/TODO.md ~/.claude/domaines/ ~/.claude/secrets-shared/ ~/.claude/reglages/CRENEAUX ~/.claude/RTK.md ~/.claude/.claudeos/empreintes/MANIFESTE.json ~/.claude/reglages/IDENTITE_GIT'
 
 # CLIQUET — trois valeurs figées à leur mesure du 2026-09-07, dépôt système seulement.
@@ -399,9 +398,10 @@ CLAUDEOS_CLIQUET_PERSONNALISATION=75   # pourcent, cliquet INVERSE posé le 2026
 # template, et elles sont tes BUDGETS DE DÉPART. L'installation n'en remesure aucun (A6, 2026-10-01) :
 # mesurés sur un poste neuf, les descriptions n'auraient laissé aucune place à ta première compétence,
 # que rien de tien n'aurait pu financer, et l'index, encore absent, se serait figé à rien.
-# `reglages/CLIQUETS`, une ligne `CLE=valeur`, les ABAISSE quand tu le décides, et l'emporte alors.
-# Un cliquet ne remonte jamais : pour ajouter, retirer d'abord. Le règlement, le compte de contrôles et la personnalisation sont des propriétés du
-# template et restent ici.
+# `reglages/CLIQUETS`, une ligne `CLE=valeur`, fixe ton propre budget et l'emporte alors. La leçon du
+# cliquet tient — pour ajouter, retirer d'abord —, mais le budget est le tien : il se baisse après un
+# ménage, et se relève aussi, si tu le décides. Le règlement, le compte de contrôles et la
+# personnalisation sont des propriétés du template et restent ici.
 if [ -f "$REG/CLIQUETS" ]; then
     while IFS='=' read -r _cos_k _cos_v; do
         case "$_cos_k" in

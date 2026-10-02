@@ -145,7 +145,7 @@ if [ -z "$CLAUDEOS_SECRET_RE_FORMES" ] || [ -z "$CLAUDEOS_SECRET_RE_MOTS" ] || [
     exit 13
 fi
 
-# Extensions de donnée texte : le vecteur des fuites du 2026-07-03.
+# Extensions de donnée texte : un export, un journal ou une pièce jointe y partirait sans un mot.
 # SOURCE UNIQUE : `config.sh` porte le motif depuis le 2026-08-24, parce que `claudeos-cloture.sh`
 # le lit aussi. Le repli embarqué ne sert qu'à un poste dont le `config.sh` est en retard —
 # il PRÉVIENT au lieu de se taire, sinon un motif divergent passerait inaperçu.
@@ -173,8 +173,8 @@ _leve()  { [ -n "${2:-}" ] && { echo "[alarmes] ⚠ $1 LEVÉE — motif : $2" >&
 FAIL=0
 
 # --- 1. Binaire ajouté (code 12) --------------------------------------------
-# L'alarme secret ne lit que le texte : elle est AVEUGLE au binaire. C'est le
-# trou par lequel des .pdf/.docx client ont fuité.
+# L'alarme secret ne lit que le texte : elle est AVEUGLE au binaire. Un .pdf ou un .docx de
+# client passerait par ce trou.
 NEW_BIN="$(_git_numstat_ajouts | awk -F'\t' '$1=="-"&&$2=="-"{print $3}' || true)"
 if [ -n "$NEW_BIN" ]; then
     if ! _leve "BINAIRE" "${FORCE_BINARY:-}"; then
@@ -192,7 +192,7 @@ fi
 # mordait donc sur TOUT ce qu'on y rangeait — `secrets-shared/note_anodine.md` a été
 # refusé au banc d'essai — pendant que son message d'aide, six lignes plus bas,
 # prescrivait précisément d'y ranger. Le conseil était insuivable : constaté le
-# 2026-08-31 sur une clé Adobe, reproduit sur copie du garde le 2026-09-01.
+# 2026-08-31 sur une vraie clé à ranger, reproduit sur copie du garde le 2026-09-01.
 # CE N'EST PAS LA LISTE BLANCHE RETIRÉE LE 2026-08-22 (voir le bloc plus haut). Celle-là
 # était MUETTE — c'était l'objection, et elle tenait. Celle-ci TRACE : une ligne à l'écran
 # et une ligne datée dans .git/ALARMES_FORCEES.log, par fichier. Elle ne lève QUE le nom :
@@ -220,12 +220,17 @@ fi
 # --- 3. Contenu de secret (code 14) -----------------------------------------
 DIFF="$(_git_diff_ajouts 2>/dev/null | grep '^+' | grep -v '^+++' || true)"
 HIT=""
-[ -n "$DIFF" ] && HIT="$(printf '%s' "$DIFF" | grep -Ei -- "$CLAUDEOS_SECRET_RE_FORMES|$CLAUDEOS_SECRET_RE_MOTS" | head -3 || true)"
+# Les FORMES se comparent à la casse exacte, les MOTS sans elle : `config.sh` l'exige, et une forme
+# comparée sans la casse fait sonner un bloc base64 (audit de la v3.0.0, une clôture refusée).
+[ -n "$DIFF" ] && HIT="$( { printf '%s' "$DIFF" | grep -E -- "$CLAUDEOS_SECRET_RE_FORMES"
+                            printf '%s' "$DIFF" | grep -Ei -- "$CLAUDEOS_SECRET_RE_MOTS"; } | head -3 || true)"
 if [ -n "$HIT" ] && [ "$FAIL" -eq 0 ]; then
     if ! _leve "SECRET-CONTENU" "${FORCE_SECRET:-}"; then
         echo "[alarmes] ⛔ ALARME SECRET — une valeur de secret apparaît dans la file." >&2
         echo "[alarmes] Fichiers concernés (la VALEUR n'est pas affichée) :" >&2
-        _git_noms ACM -z | xargs -0 grep -lEi -- "$CLAUDEOS_SECRET_RE_FORMES|$CLAUDEOS_SECRET_RE_MOTS" 2>/dev/null | head -5 | sed 's/^/      /' >&2
+        { _git_noms ACM -z | xargs -0 grep -lE -- "$CLAUDEOS_SECRET_RE_FORMES" 2>/dev/null
+          _git_noms ACM -z | xargs -0 grep -lEi -- "$CLAUDEOS_SECRET_RE_MOTS" 2>/dev/null; } \
+            | sort -u | head -5 | sed 's/^/      /' >&2
         echo "[alarmes] Un secret exposé est COMPROMIS : régénère-le et consigne-le dans SECURITY_DEBT.md." >&2
         FAIL=14
     fi
@@ -255,11 +260,10 @@ _JOURNAL_RE='(^|/)journal/[0-9]{4}-[0-9]{2}\.jsonl$'
 # Un motif qui ne dirait que `.claude/settings.json` — la lettre du du `u-controle-15-config-chemin`
 # — RATERAIT LE DÉPÔT `~/.claude`, celui où l'écart a été trouvé. Et l'ancrage racine reste étroit :
 # un `settings.json` posé en sous-dossier quelconque (`docs/`, `app/`) reste refusé.
-# PÉRIMÈTRE VOLONTAIREMENT ÉTROIT : `settings.local.json` N'EST PAS exempté, décision de
-# l'utilisateur du 2026-09-09. Son motif écrit — « hors dépôt par nature » — est FAUX, mesuré le
-# 2026-09-10 : `<DÉPÔT_B>` en suit un. Le périmètre tient quand même, mais pour l'autre raison :
-# ce fichier porte les permissions locales d'un poste et n'a rien à faire en zone partagée, donc
-# l'alarme qui se lève dessus DIT quelque chose. Voir le du `u-settings-local-suivi-client-b`.
+# PÉRIMÈTRE VOLONTAIREMENT ÉTROIT : `settings.local.json` N'EST PAS exempté (2026-09-09). Son motif
+# d'origine — « hors dépôt par nature » — est faux : un dépôt peut en suivre un. Le périmètre tient
+# quand même, pour l'autre raison : ce fichier porte les permissions locales d'un poste et n'a rien
+# à faire en zone partagée, donc l'alarme qui se lève dessus DIT quelque chose.
 # CE QUI GARDE LE FICHIER MALGRÉ L'EXEMPTION, et c'est pour ça qu'elle est acceptable : les
 # contrôles 13 et 14 (nom de secret, contenu de secret) le balaient toujours, et le contrôle 17
 # refuse un JSON invalide.
@@ -278,7 +282,7 @@ if [ -n "$NEW_DATA" ] && [ "$FAIL" -eq 0 ]; then
     if ! _leve "DONNEE" "${FORCE_DATA:-}"; then
         echo "[alarmes] ⛔ ALARME DONNÉE — fichier(s) de données texte ajouté(s) :" >&2
         echo "$NEW_DATA" | head -10 | sed 's/^/      /' >&2
-        echo "[alarmes] Vecteur des fuites texte du 2026-07-03. Range en _IGNORE/ ou assume :" >&2
+        echo "[alarmes] Un fichier de données sortirait du poste sans un mot : range-le en _IGNORE/, ou assume :" >&2
         echo "[alarmes]   FORCE_DATA=\"motif\" git commit …" >&2
         FAIL=15
     fi
@@ -335,8 +339,7 @@ fi
 
 
 # =============================================================================
-# CONTRÔLES 8, 9 et 10 — posés le 2026-09-07, palier 0 du plan de consolidation.
-# Raisonnement complet : `~/.claude/plans-systeme/2026-09-05-plan-consolidation.md`.
+# CONTRÔLES 8, 9 et 10 — posés le 2026-09-07.
 #
 # RÉGIME, arbitré par l'utilisateur le 2026-09-07 CONTRE la lettre du plan, qui les
 # voulait tous les trois bloquants. La fiche `controles-et-alarmes` § « Ce qui bloque
@@ -407,7 +410,7 @@ fi
 # Dépôt SYSTÈME seulement : les trois valeurs mesurent des objets qui n'existent que là.
 # La racine du système est résolue depuis l'emplacement de CE fichier, jamais en dur —
 # deux postes aux dossiers personnels différents.
-# `pwd -P` ET NON `pwd` : depuis le 2026-09-12 `~/.claude` est un LIEN vers Documents/ClaudeOS.
+# `pwd -P` ET NON `pwd` : `~/.claude` peut être un LIEN vers un autre dossier.
 # `git rev-parse --show-toplevel` rend le chemin PHYSIQUE, `pwd` sans -P rend le chemin LOGIQUE :
 # les deux ne pouvaient plus etre egaux, et CE BLOC NE S EXECUTAIT PLUS DU TOUT — le cliquet de
 # croissance etait muet depuis quatre jours, sans un mot. Mesure et correction le 2026-09-16.
@@ -480,7 +483,7 @@ if [ -n "$_SYS_ROOT" ] && [ "$_GIT_ROOT_P" = "$_SYS_ROOT" ] && [ "$FAIL" -eq 0 ]
             printf '%s' "$_CLIQ" >&2
             echo "[alarmes] On ne remonte jamais : pour ajouter, retire. Nomme ce qui sort." >&2
             echo "[alarmes] Sinon assume : FORCE_CLIQUET=\"motif\" git commit … (tracé)" >&2
-            echo "[alarmes] Une baisse se réécrit dans engine/config.sh, CLAUDEOS_CLIQUET_*, avec sa date." >&2
+            echo "[alarmes] Tes budgets — descriptions, index, fiche — se règlent dans reglages/CLIQUETS, une ligne CLE=valeur." >&2
             FAIL=20
         fi
     fi
@@ -760,6 +763,7 @@ fi
 # qu'aucun garde au commit ne le voie — le contrôle hebdomadaire AVERTISSAIT, six jours plus tard.
 # PÉRIMÈTRE : les lignes AJOUTÉES du diff en file, tout fichier suivi, MOINS les fichiers GELÉS
 # (en-tête en première ligne, même discriminant que le 14), les archives et les rapports d'audit,
+# les BINAIRES, qui n'ont pas de ligne ajoutée (bloc daté du 2026-10-01 dans la boucle),
 # et le `config.sh` qui déclare les motifs (`CLAUDEOS_TEXTES_HORS_GARDE_RE`). Les motifs, leurs
 # ancrages mesurés et l'absence voulue d'exemption vivent dans `config.sh`, SOURCE UNIQUE, et
 # ne sont pas recopiés ici — ce fichier n'est PAS exclu du périmètre, il ne doit donc pas porter
@@ -781,8 +785,18 @@ for _v in CLAUDEOS_NOMS_MORTS_RE CLAUDEOS_PROVENANCE_DATEE_RE CLAUDEOS_CHEMIN_PO
 done
 _MORTS=""; _POSTE=""
 if [ "$FAIL" -eq 0 ]; then
+    # BINAIRES SAUTÉS — 2026-10-01. La lecture du gel met le
+    # fichier ENTIER dans une variable ; sur un binaire, bash 5 écrit « octet nul ignoré » sur
+    # STDERR, le canal des vraies alarmes — à chaque binaire en file, et un binaire MODIFIÉ suffit :
+    # l'alarme 12 ne regarde que les ajouts. Un binaire n'a aucune ligne ajoutée : `git diff` le dit
+    # « Binary files … differ », avec la même détection que `--numstat`. Le sauter ne change donc
+    # aucun verdict. RESTE CONNU : git juge texte un fichier sans octet nul dans ses 8 000 premiers
+    # octets (frontière mesurée), et un nul plus loin ferait encore parler ce bloc, le contrôle 14 et
+    # un `grep`. Mesuré le 2026-10-01 : aucun des 962 fichiers suivis des cinq dépôts n'est dans ce cas.
+    _BIN1516=$'\n'"$(git diff --cached --numstat --diff-filter=ACM | awk -F'\t' '$1=="-"&&$2=="-"{print $3}')"$'\n'
     while IFS= read -r _f; do
         [ -n "$_f" ] || continue
+        case "$_BIN1516" in *$'\n'"$_f"$'\n'*) continue ;; esac
         printf '%s\n' "$_f" | /usr/bin/grep -qE -- "$CLAUDEOS_TEXTES_HORS_GARDE_RE" && continue
         # GELÉ : première ligne de HEAD, ou de la version en file pour un fichier neuf.
         _t="$(_git_tete "$_f" 2>/dev/null)" || _t="$(_git_montre "$_f" 2>/dev/null)" || _t=""
@@ -805,11 +819,14 @@ if [ -n "$_MORTS" ] && [ "$FAIL" -eq 0 ]; then
         FAIL=27
     fi
 fi
-if [ -n "$_POSTE" ] && [ "$FAIL" -eq 0 ]; then
+# MONOPOSTE : la règle « aucun chemin propre à un poste » n'entre pas quand MULTIPOSTE=non
+# (ENTRETIEN.md) — il n'y a pas d'autre poste où le chemin serait faux. Le contrôle 16 se saute
+# alors, comme le contrôle hebdomadaire qui tient la même règle (audit de la v3.0.0).
+if [ -n "$_POSTE" ] && [ "$FAIL" -eq 0 ] && [ "$(claudeos_reponse MULTIPOSTE 2>/dev/null)" != non ]; then
     if ! _leve "CHEMIN-POSTE" "${FORCE_CHEMIN_POSTE:-}"; then
         echo "[alarmes] ⛔ CHEMIN PROPRE À UN POSTE dans un fichier suivi — il voyage, et il est faux sur l'autre poste :" >&2
         printf '%s' "$_POSTE" >&2
-        echo "[alarmes] Écris ~ ou \$HOME, ou résous le chemin par la fiche du parc (memory/env_parc_postes.md)." >&2
+        echo "[alarmes] Écris ~ ou \$HOME, ou un chemin relatif." >&2
         echo "[alarmes] Le motif : engine/config.sh, CLAUDEOS_CHEMIN_POSTE_RE. Sinon assume : FORCE_CHEMIN_POSTE=\"motif\" git commit … (tracé)" >&2
         FAIL=28
     fi

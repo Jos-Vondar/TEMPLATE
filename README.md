@@ -97,9 +97,11 @@ claude --settings installateur/settings.installation.json --permission-mode auto
 
 En mode auto, un classificateur de Claude Code évalue les actions de l'agent, et
 `installateur/settings.installation.json` autorise par avance les scripts du moteur qu'il exécute.
-Une ou deux demandes de confirmation peuvent néanmoins apparaître, en particulier pour une écriture
+Quelques demandes de confirmation peuvent néanmoins apparaître, en particulier pour une écriture
 dans `~/.claude`, que Claude Code n'approuve jamais de lui-même. Elles sont à accepter : c'est dans
-ce dossier que l'agent installe le système.
+ce dossier que l'agent installe le système. Si votre organisation a désactivé le mode auto, ou si
+votre modèle ne le prend pas en charge, Claude Code démarre en mode Manual : chaque commande demande
+alors votre accord.
 
 Au moment de la plomberie, l'agent vous communique une ligne à ajouter à votre `~/.zshrc`, ou à
 votre `~/.bashrc` sous WSL : c'est elle qui déclenche le démarrage de ClaudeOS à chaque session. Cet
@@ -124,14 +126,20 @@ une reprise réelle.
 **Tant que l'installation n'est pas complète, elle se déclare inachevée.** Chaque démarrage de
 session l'indique en tête et nomme l'élément manquant : une réponse, une marque « à remplir »
 restée dans votre `CLAUDE.md`, ou la première sauvegarde (la première clôture, en régime sans git).
-Relancez l'agent pour reprendre là où l'installation s'est arrêtée.
+Relancez l'agent pour reprendre là où l'installation s'est arrêtée : depuis l'amorce, ou, si vous
+l'avez supprimée, depuis votre système :
+
+```
+cd ~/.claude
+claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur
+```
 
 ### La sauvegarde a lieu à la clôture
 
 Aucune sauvegarde n'a lieu en fin de session. Elle intervient lorsque vous clôturez la séance dans
 la session principale (« on arrête »). Celle-ci demande d'abord aux sessions de projet ouvertes si
-elles ont terminé leurs écritures, puis projette l'état de chaque niveau, exécute ses contrôles et,
-en régime GitHub, envoie chaque dépôt. Une séance terminée sans clôture reste sur votre poste, non
+elles ont terminé leurs écritures, puis projette l'état de chaque niveau, passe les alarmes du
+crochet de commit et, en régime GitHub, envoie chaque dépôt. Une séance terminée sans clôture reste sur votre poste, non
 sauvegardée.
 
 ### Un poste supplémentaire
@@ -153,26 +161,32 @@ pas chargé. Claude Code en terminal le charge normalement.
 ### Ce qu'une version modifie, et ce qu'elle ne modifie jamais
 
 Le modèle possède ce qu'une version modifie : `engine/`, `noyau/`, `gabarits/`, `installateur/`,
-les compétences livrées sous `skills/`, ce fichier et la licence. Ces fichiers ne doivent pas être
-modifiés : la version suivante les remplace, et une modification locale y devient un conflit. La
-liste exacte, fichier par fichier, figure dans `engine/PERIMETRE_TEMPLATE`.
+`resources/`, `output-styles/`, `.claude/agents/`, les compétences livrées sous `skills/`,
+`.gitignore`, ce fichier et la licence. Ces fichiers ne doivent pas être modifiés : la version
+suivante les remplace, et une modification locale y devient un conflit. La liste exacte, fichier par
+fichier, figure dans `engine/PERIMETRE_TEMPLATE`.
 
 Tout le reste vous appartient, et aucune version n'y touche : votre `CLAUDE.md` (à l'exception du
 bloc d'imports situé entre ses deux marqueurs, que le moteur réécrit à partir de vos réponses), vos
 réponses et réglages sous `reglages/`, votre mémoire sous `memory/`, votre journal et votre état,
 vos dossiers de travail. Vos propres règles se placent dans la section « Mes règles » de votre
-`CLAUDE.md`.
+`CLAUDE.md`. Les budgets de taille que le crochet de commit fait respecter, pour les descriptions
+des compétences, l'index de mémoire et la plus grosse fiche, partent des valeurs du modèle et se
+règlent dans `reglages/CLIQUETS`, une ligne `CLE=valeur` par budget (`engine/config.sh` les nomme).
 
 ### Depuis une V3
 
 Les versions sont des étiquettes de ce dépôt. Pour passer à une nouvelle version, relancez l'agent :
 il identifie votre régime et conduit la mise à jour.
 
-- **En régime GitHub**, depuis votre système : `cd ~/.claude && claude --permission-mode auto --agent claudeos-installateur`.
+- **En régime GitHub**, depuis votre système :
+  `cd ~/.claude && claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur`.
   L'agent fusionne la version par git depuis ce dépôt, déclaré comme `upstream` à l'installation, et
   résout avec vous tout conflit portant sur un fichier que vous avez modifié.
 - **Sans git**, extrayez l'archive de la nouvelle version dans une amorce neuve, comme décrit dans
-  « Récupérer le modèle », et lancez l'agent depuis celle-ci. Il compare chaque fichier livré à la
+  « Récupérer le modèle », et lancez l'agent depuis celle-ci. Si `~/claudeos-amorce` existe encore,
+  renommez-la d'abord, par exemple `mv ~/claudeos-amorce ~/claudeos-amorce-ancienne` : extraite
+  par-dessus, l'archive y laisserait les fichiers que la version retire. Il compare chaque fichier livré à la
   version précédemment livrée : un fichier que vous n'avez pas modifié est remplacé, un fichier que
   vous avez modifié vous est présenté, et rien n'est écrasé sans votre accord.
 

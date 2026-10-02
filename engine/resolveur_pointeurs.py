@@ -102,9 +102,8 @@ def resout(c, mem=MEM_DEFAUT):
 
 
 # D3 de l'audit du 2026-09-16, posé le 2026-09-17. Le contrôle savait qu'une cible EXISTE ; il ne
-# savait pas si elle est VIVANTE. V-1 : trois questions d'état — « Let's Play EN COURS », « que
-# RESTE-T-IL à faire sur le mémoire », « comment bloquer les essais » — pointaient des `MEMORY.md`
-# et `HANDOFF.md` GELÉS le 2026-09-09, donc figés. Le contrôle rendait vert : le fichier existait.
+# savait pas si elle est VIVANTE. V-1 : trois questions d'état pointaient des `MEMORY.md` et des
+# `HANDOFF.md` GELÉS le 2026-09-09, donc figés. Le contrôle rendait vert : le fichier existait.
 # Corrigés un à un par A3 le 2026-09-16 ; ceci empêche la régression, qui est certaine autrement —
 # le gel a figé 22 fichiers de reprise et 11 `MEMORY.md` d'un coup, et rien ne relit les pointeurs.
 QUESTION_VIVANTE = re.compile(

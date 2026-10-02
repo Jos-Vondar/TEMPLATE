@@ -18,8 +18,8 @@ L'état de la migration vit dans la quarantaine, `~/.claudeos-v2-quarantaine/<AA
                dossier, lien
   import/      ce que `--importer` a écrit, les listes à trancher, et DECISIONS, en ajout seul
 La version installée se lit sur la V2 elle-même, comparée à `engine/config/V2_EMPREINTES` : une
-table d'empreintes des étiquettes v1.1.0 à v2.2.0 du template, sans aucun texte de la V2, que
-l'atelier régénère par `outils/reference-v2.py` en faisant tourner l'assembleur de chaque version.
+table d'empreintes des étiquettes v1.1.0 à v2.2.0 du template, sans aucun texte de la V2, livrée
+avec le moteur.
 
 Usage :
   import-v2.py --inventaire               lecture seule : V-1 à V-18, la version, les questions
@@ -194,7 +194,7 @@ def lit_reference():
     """La table `V2_EMPREINTES` : versions, fichiers, lignes du gabarit, rubriques du persona."""
     texte = lit(REFERENCE)
     if texte is None:
-        raise Appel('table de référence illisible : %s — elle se régénère par outils/reference-v2.py' % REFERENCE)
+        raise Appel('table de référence illisible : %s — elle est livrée avec le moteur ; reprends-la de ton amorce' % REFERENCE)
     ref = {'versions': {}, 'fichiers': {}, 'gabarit': {}, 'persona': {}}
     for n, l in enumerate(texte.splitlines(), 1):
         if not l.strip() or l.startswith('#'):
@@ -970,6 +970,11 @@ def cmd_quarantaine(racine, a):
                 shutil.rmtree(p)
         elif g == 'modifie':
             neuf = apres_modification(rel)
+            # Un fichier du shell tenu par un lien (stow, dépôt de dotfiles) se modifie DANS SA CIBLE :
+            # remplacer le lien par un fichier ordinaire cassait les dotfiles, et la restauration, qui
+            # écrit à travers le chemin, ne rendait pas le lien (audit de la v3.0.0).
+            if os.path.islink(p):
+                p = os.path.realpath(p)
             with open(p + '.neuf', 'wb') as f:
                 f.write(neuf)
             os.chmod(p + '.neuf', os.stat(p).st_mode & 0o7777)

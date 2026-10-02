@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """index-fts.py — l'index dérivé, GESTE D'ESCALADE après un `grep` vide.
 
-Geste 2.8 du plan `plans-systeme/2026-09-09-plan-implementation-unifie.md`, seule autorité du
-contrat. Ce fichier ne recopie pas son raisonnement ; il l'implémente, et les écarts décidés à
-l'écriture sont marqués ÉCART ci-dessous.
+Les écarts décidés à l'écriture sont marqués ÉCART ci-dessous.
 
 CE QUE CET INDEX N'EST PAS : un pilier. Il ne se consulte pas d'abord. Le chemin normal reste
 `grep` sur le bon périmètre — c'est mesuré, et le verdict du 2026-09-08 est sans ambiguïté : sur

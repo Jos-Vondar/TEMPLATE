@@ -248,9 +248,17 @@ def message_inachevee(motifs):
     manque : quand seule la première sauvegarde ou clôture manque, le règlement est déjà le tien, et
     le dire tourner sur un gabarit serait faux."""
     tete = '⚠ INSTALLATION INACHEVÉE — %s.' % ', '.join(motifs)
-    if 'réponses' in motifs or 'marques' in motifs:
-        return (tete + ' Lance `/claudeos-onboarding` dans Claude Code. Tant que cette ligne '
-                's\'affiche, ce poste tourne avec un règlement de gabarit, pas le tien.')
+    # Des réponses manquent : c'est l'INSTALLATION qui est à reprendre, premier domaine et répétition
+    # compris — l'entretien rejoué n'y revient jamais (audit de la v3.0.0). Seule une marque restée
+    # dans le persona relève de l'entretien.
+    if 'réponses' in motifs:
+        return (tete + ' Relance l\'agent d\'installation : `cd ~/.claude && claude --settings '
+                'installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur`. '
+                'Il reprend là où elle s\'est arrêtée. Tant que cette ligne s\'affiche, ce poste tourne avec '
+                'un règlement de gabarit, pas le tien.')
+    if 'marques' in motifs:
+        return (tete + ' Une rubrique de ton règlement attend sa réponse : `/claudeos-onboarding` la '
+                'reprend, dans Claude Code.')
     if 'sauvegarde' in motifs:
         return (tete + ' Ton règlement est réglé ; il manque la première sauvegarde poussée : '
                 'clôture la séance — « on arrête » —, la clôture pousse ton dépôt privé.')
@@ -451,7 +459,7 @@ def verifie_livre(r, racine):
              % ', '.join('%s (%s)' % e for e in ecarts[:6]) + (' …' if len(ecarts) > 6 else ''))
     else:
         r.ok('les %d fichiers livrés égalent .claudeos/livre/MANIFESTE%s' % (
-            n, ', dont %d écart(s) gardé(s) par choix à la mise à jour (GARDES)' % len(tenus) if tenus else ''))
+            n, ', dont %d écart(s) gardé(s) par choix (GARDES)' % len(tenus) if tenus else ''))
     # La copie livrée est la base de la mise à jour (A8) : fausse, elle ferait montrer un écart faux.
     if arbre:
         r.ko('copie livrée, .claudeos/livre/ARBRE.tar.gz : %s' % ' · '.join(arbre[:4])
@@ -544,6 +552,16 @@ def cmd_plomberie(racine, a):
             r.ok('crochet de commit posé')
         else:
             r.ko('crochet de commit absent : le dépôt committerait sans aucune alarme — install-poste.sh')
+        # Un `core.hooksPath`, local ou global, détourne git de `.git/hooks` : le shim y est et ne
+        # tourne jamais (audit de la v3.0.0).
+        rc, hp, _ = git(racine, 'config', '--get', 'core.hooksPath')
+        if rc == 0 and hp.strip():
+            cible = os.path.expanduser(hp.strip())
+            if not os.path.isabs(cible):
+                cible = os.path.join(racine, cible)
+            if os.path.realpath(cible) != os.path.realpath(os.path.join(racine, '.git', 'hooks')):
+                r.ko('core.hooksPath vaut %s : git y cherche ses crochets, et celui de ClaudeOS ne tourne '
+                     'pas — retire-le (git config --global --unset core.hooksPath)' % hp.strip())
         rc, attr, _ = git(racine, 'config', '--get', 'core.attributesFile')
         attendu = os.path.join(racine, 'engine', 'config', 'gitattributes-journal')
         if rc == 0 and os.path.realpath(os.path.expanduser(attr.strip())) == os.path.realpath(attendu):
@@ -579,7 +597,20 @@ def cmd_plomberie(racine, a):
 
 
 # -------------------------------------------------------------------------------- entretien
-def verifie_persona(r, texte):
+def verifie_persona(r, texte, plus_tard=False):
+    # « PLUS TARD » laisse la marque d'une rubrique du persona (ENTRETIEN.md, § 5), et l'installation
+    # se dit inachevée tant qu'elle survit. À l'entretien (`plus_tard`), elle avertit sans bloquer :
+    # le refus arrêtait l'installation avant le premier domaine et la première sauvegarde (audit de la
+    # v3.0.0). L'arrivée, elle, reste stricte. Identité ne se remet pas à plus tard.
+    reportees = []
+    if plus_tard:
+        for n, c in rubriques(texte) or []:
+            if n != 'Identité' and c and all(l.strip() in MARQUES for l in c):
+                reportees.append(n)
+                texte = re.sub(r'^### %s[ \t]*\n.*?(?=^### |^## |\Z)' % re.escape(n), '', texte, flags=re.M | re.S)
+        if reportees:
+            r.avert('rubrique(s) remise(s) à plus tard : %s — l\'installation reste inachevée tant que '
+                    'leur marque survit' % ', '.join(reportees))
     marques = marques_de(texte)
     if marques:
         r.ko('marque de gabarit encore dans CLAUDE.md : %s' % ', '.join(marques[:4]))
@@ -627,7 +658,7 @@ def cmd_entretien(racine, a):
     if texte is None:
         r.ko('CLAUDE.md absent')
     else:
-        verifie_persona(r, texte)
+        verifie_persona(r, texte, plus_tard=True)
     options = next((c['valeurs'] for c in contrat if c['cle'] == 'SKILLS_OPTION'), [])
     retenues = set(L.elements(valeurs.get('SKILLS_OPTION', '')))
     for nom in options:
@@ -701,10 +732,17 @@ def cmd_arrivee(racine, a):
 
 # ------------------------------------------------------------------------- migration, mise à jour
 def cmd_migration(racine, a):
+    # AVANT LA PLOMBERIE, la racine ne porte pas encore le moteur : une V2 range le sien sous
+    # `~/.claudeos/`. Le script se prend alors à côté de ce vérificateur, dans l'amorce, qui porte
+    # le même fichier (MIGRER.md, « Le script »). Ne chercher que sous la racine rendait 2 juste
+    # après la quarantaine, et la procédure s'arrêtait là (audit de la v3.0.0).
     script = os.path.join(racine, 'engine', 'import-v2.py')
     if not os.path.isfile(script):
+        script = os.path.join(ICI, 'import-v2.py')
+    if not os.path.isfile(script):
         raise Appel('%s absent : cette version du template ne sait pas encore vérifier une migration' % script)
-    rc, out, err = lance([sys.executable, script, '--verifier', '--etape', a.etape or 'fin'], timeout=600)
+    rc, out, err = lance([sys.executable, script, '--verifier', '--etape', a.etape or 'fin',
+                          '--racine', racine], timeout=600)
     sys.stdout.write(out)
     sys.stderr.write(err)
     return rc
@@ -727,6 +765,21 @@ def cmd_mise_a_jour(racine, a):
             r.ko('fusion inachevée, fichiers en conflit : %s' % ', '.join(out.split()[:6]))
         if os.path.exists(os.path.join(racine, '.git', 'MERGE_HEAD')):
             r.ko('une fusion est en cours (MERGE_HEAD) : la conclure ou l\'abandonner')
+        # La version est entrée par git, ou elle n'est pas entrée : son étiquette est un ancêtre.
+        if version:
+            etiquette = 'v' + version.lstrip('v')
+            rc, _, _ = git(racine, 'rev-parse', '-q', '--verify', 'refs/tags/' + etiquette)
+            if rc != 0:
+                r.avert('étiquette %s absente du dépôt : git fetch upstream --tags, puis relance' % etiquette)
+            else:
+                rc, _, err = git(racine, 'merge-base', '--is-ancestor', etiquette, 'HEAD')
+                if rc == 0:
+                    r.ok('%s est un ancêtre de HEAD : la version est fusionnée' % etiquette)
+                elif rc == 1:
+                    r.ko('%s n\'est pas un ancêtre de HEAD : la version n\'a pas été fusionnée '
+                         '(METTRE_A_JOUR.md, « En GitHub »)' % etiquette)
+                else:
+                    raise Appel('git merge-base rc=%d : %s' % (rc, dernier(err)))
         rc, tous, _ = git(racine, 'ls-files')
         chemins = [l for l in tous.splitlines() if l.strip()]
     else:

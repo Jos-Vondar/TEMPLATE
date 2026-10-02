@@ -71,7 +71,7 @@ find_by_pattern() {
 # n'a aucun intérêt. `_IGNORE/` est le réceptacle du confidentiel (règlement, § File
 # Management) et il est HORS SAUVEGARDE par conception : une session ouverte dedans écrirait
 # son état, son journal et ses livrables sur la seule machine locale, sans qu'un mot le dise.
-# Relevé le jour même : le fragment « ARC » rendait DEUX candidats, dont
+# Relevé le jour même : un fragment de nom d'app rendait DEUX candidats, dont
 # `<DÉPÔT_A>/_IGNORE/<APP>`. La garde d'ambiguïté a refusé d'ouvrir — mais
 # pour AMBIGUÏTÉ, pas pour ce motif : un fragment univoque serait passé.
 # LES AUTRES APPELANTS DE `claudeos_ws_roots` ONT ÉTÉ VÉRIFIÉS le même jour, parce qu'une
@@ -333,11 +333,8 @@ sync_repos() {
             echo "[maj] $nom : modifications non validées, PAS de pull. À traiter en session." >&2
             continue
         fi
-        if git -C "$repo" pull --rebase -q 2>/dev/null; then
-            echo "[maj] $nom à jour."
-        else
-            echo "[maj] WARN : pull --rebase impossible sur $nom (hors-ligne ?)." >&2
-        fi
+        # `claudeos_integre` (lib_regime.sh) dit lui-même un distant injoignable ou un conflit annulé.
+        claudeos_integre "$repo" "$nom" "[maj]" && echo "[maj] $nom à jour."
     done
 }
 
@@ -374,7 +371,10 @@ open_main() {
     echo "Pour t'y attacher :  tmux attach -t ClaudeOS"
 }
 
-command -v tmux >/dev/null 2>&1 || {
+# `--prepare` tourne SANS tmux : c'est le geste du wrapper quand `claude` est tapé nu. L'exiger ici
+# privait un poste sans tmux — simple avertissement aux prérequis — de toute mise à jour et de tout
+# pull, avec une erreur à chaque lancement (audit de la v3.0.0).
+[ "${1:-}" = --prepare ] || command -v tmux >/dev/null 2>&1 || {
     case "$(uname -s)" in Darwin) _geste="brew install tmux" ;; *) _geste="sudo apt install -y tmux" ;; esac
     echo "tmux n'est pas installé : $_geste" >&2; exit 1; }
 command -v claude >/dev/null 2>&1 || { echo "le binaire 'claude' est introuvable dans le PATH." >&2; exit 1; }

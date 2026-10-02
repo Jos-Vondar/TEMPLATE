@@ -21,7 +21,7 @@
     {"id": "claudeos.inachevee", "text": "« INSTALLATION INACHEVÉE » au démarrage nomme ce qui manque : réponses, marques, sauvegarde ou clôture.", "cooldownSessions": 6, "priority": 3},
     {"id": "claudeos.nouveau-projet", "text": "Un projet de plus dans un domaine : « nouveau projet ». Un domaine entier : « nouveau domaine ».", "cooldownSessions": 12, "priority": 1},
     {"id": "claudeos.pousser-n-est-pas-clore", "text": "Avec GitHub, une session de projet pousse son dossier ; pousser n'est pas clôturer, la clôture reste à la principale.", "cooldownSessions": 12, "priority": 1},
-    {"id": "claudeos.mise-a-jour", "text": "Une version neuve du template : cd ~/.claude && claude --permission-mode auto --agent claudeos-installateur, puis « mettre à jour ».", "cooldownSessions": 30, "priority": -1},
+    {"id": "claudeos.mise-a-jour", "text": "Une version neuve du template : cd ~/.claude && claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur, puis « mettre à jour ».", "cooldownSessions": 30, "priority": -1},
     {"id": "claudeos.secret", "text": "Un secret ne s'écrit jamais dans un fichier suivi : le crochet de commit le refuse. Où le ranger : la compétence secrets-detail.", "cooldownSessions": 15, "priority": 1},
     {"id": "claudeos.recherche-vide", "text": "Une recherche vide ne prouve rien tant que le motif n'a pas varié et que le périmètre n'est pas nommé.", "cooldownSessions": 15, "priority": 0}
   ]

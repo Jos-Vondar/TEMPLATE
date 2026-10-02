@@ -64,8 +64,13 @@ _ecart() {
     [ -d "$repo/.git" ] || return 0
     [ -n "$(git -C "$repo" remote 2>/dev/null)" ] || return 0
     if [ "$_SONDE_RETARD" = 1 ]; then
-        git -C "$repo" fetch --quiet 2>/dev/null
-        behind=$(git -C "$repo" rev-list --count HEAD..@{u} 2>/dev/null || echo 0)
+        # Un `fetch` en échec ne dit rien du retard : hors ligne ou jeton expiré, les références
+        # locales sont périmées, et les compter rendrait « à jour » (audit de la v3.0.0).
+        if git -C "$repo" fetch --quiet 2>/dev/null; then
+            behind=$(git -C "$repo" rev-list --count HEAD..@{u} 2>/dev/null || echo 0)
+        else
+            OUT="${OUT}⚠️ Dépôt ${nom} : distant injoignable, le retard N'EST PAS mesuré — ne clôture pas d'ici avant d'avoir tiré."$'\n'
+        fi
     fi
     dirty=$(git -C "$repo" status --porcelain 2>/dev/null | wc -l | tr -d ' ')
     BEHIND=$(( BEHIND + behind )); DIRTY=$(( DIRTY + dirty ))
@@ -234,6 +239,12 @@ fi
 _verdict_depot() {
     local repo="$1" nom="$2" ahead age ts
     [ -d "$repo/.git" ] || return 0
+    # En suspens, le compte ci-dessous échoue et rendait 0 : rien n'était dit d'un dépôt qui ne
+    # pousse plus rien (audit de la v3.0.0).
+    if claudeos_en_suspens "$repo"; then
+        BACKUP_ERR=1
+        OUT="${OUT}⛔ Dépôt ${nom} : un rebase ou une fusion est en cours, ou HEAD est détachée — rien de ce poste n'est poussé. git -C ${repo/#$HOME/$CLAUDEOS_TILDE} status, puis termine-le ou annule-le."$'\n'
+    fi
     ahead="$(git -C "$repo" rev-list --count @{u}..HEAD 2>/dev/null || echo 0)"
     if [ "${ahead:-0}" -gt 0 ]; then
         BACKUP_ERR=1
@@ -242,7 +253,10 @@ _verdict_depot() {
     ts="$(git -C "$repo" log -1 --format=%ct 2>/dev/null || echo 0)"
     if [ "${ts:-0}" -gt 0 ]; then
         age=$(( ( $(date +%s) - ts ) / 86400 ))
-        if [ "$age" -gt 7 ]; then
+        # L'ÂGE NE SONNE QUE SUR UN ARBRE SALE — reporté de la source le 2026-10-02. Un dépôt propre et
+        # poussé n'a rien à sauvegarder : il sonnait sur tout domaine inactif depuis une semaine. Ce que
+        # l'âge cherche, une clôture qui ne tourne plus, laisse des changements non commités.
+        if [ "$age" -gt 7 ] && [ -n "$(git -C "$repo" status --porcelain 2>/dev/null)" ]; then
             BACKUP_ERR=1
             OUT="${OUT}⚠️ Dépôt ${nom} sans nouveau commit depuis ${age}j — clôture oubliée ? bash ~/.claude/engine/claudeos-cloture.sh"$'\n'
         fi
@@ -616,12 +630,14 @@ Ne les lire que si l'utilisateur déclare un contexte de travail ou demande l'hi
 # décline pas (plan V3, lot 5, geste 3 ; rétabli dans la copie le 2026-10-01, A6). Clé absente :
 # le bilan reste, poste non réglé, jamais une valeur d'usine.
 if [ "$(claudeos_reponse BILAN_DEMARRAGE 2>/dev/null)" = "non" ]; then
-    _dette="$(printf '%s\n' "${OUT:-}" | grep '🔐' || true)"
+    # Un dépôt qui ne pousse plus rien, un retard ou un distant injoignable sont des gardes au même
+    # titre que la dette : ils restent (audit de la v3.0.0, où le bilan décliné les taisait).
+    _dette="$(printf '%s\n' "${OUT:-}" | grep -E '🔐|⛔ Dépôt|JAMAIS POUSSÉ|en retard de|distant injoignable' || true)"
     CTX_FULL="=== ClaudeOS boot ===
 ⟦CONSIGNE DE DÉMARRAGE — ne pas recopier telle quelle à l'écran⟧
 Bilan d'ouverture décliné à l'entretien (BILAN_DEMARRAGE=non) : réponds directement à la demande."
     [ -n "$_dette" ] && CTX_FULL="${CTX_FULL}
-Seule la dette de sécurité se signale, en une ligne, avant la réponse :
+Seules la dette de sécurité et les gardes de la sauvegarde se signalent, une ligne chacune, avant la réponse :
 ${_dette}"
 fi
 

@@ -19,7 +19,9 @@
 #
 # CODES : 3 shim absent · 4 alarme sur les documents · 5 alarme sur le système ·
 #         6 une autre clôture est déjà en cours (verrou) ·
-#         7 un commit a échoué SANS refus d'alarme (identité git, verrou index.lock…).
+#         7 un commit a échoué SANS refus d'alarme (identité git, verrou index.lock…) ·
+#         8 un dépôt n'a pas pu intégrer son distant (conflit, annulé) ou était en suspens
+#           (rebase, fusion, HEAD détachée) : rien de lui n'est poussé.
 # À travers `git commit`, git écrase TOUJOURS le code d'un hook par 1 : les codes
 # ci-dessus sont ceux de CE script, pas ceux du hook.
 #
@@ -50,7 +52,7 @@ SYS="$HOME/.claude"
 # PORTABILITÉ, 2026-09-12 : `mapfile` n'existe qu'à partir de bash 4.0, et macOS livre le 3.2.
 # Sous lui, `mapfile: command not found` puis `set -u` fait échouer la première lecture du tableau —
 # le script ne fait RIEN. L'idiome `while read` ci-dessous est POSIX : il tourne à l'identique sous
-# bash 3.2, bash 5 et le WSL. C'est celui que `controle-secrets.sh` l.48 employait déjà.
+# bash 3.2, bash 5 et le WSL. C'est celui qu'employait déjà `controle-secrets.sh` pour remplir `_WS`.
 _DEPOTS=(); while IFS= read -r _d; do [ -n "$_d" ] && _DEPOTS+=("$_d"); done < <(claudeos_repos)
 # SANS GIT (`GIT=aucun`), aucun dépôt : la fin de la clôture est `cloture-sans-git.sh`, plus bas.
 _SANS_GIT=""; [ "$(claudeos_regime)" = aucun ] && _SANS_GIT=1
@@ -81,10 +83,22 @@ _shim_ok() {
         echo "[clôture] Répare : bash \"\$HOME/.claude/engine/install-poste.sh\"" >&2
         return 1
     fi
+    # Un `core.hooksPath`, local ou global, envoie git chercher ses crochets AILLEURS : le shim est
+    # là et ne tourne jamais (audit de la v3.0.0, un secret commité sans alarme).
+    local hp; hp="$(git -C "$repo" config --get core.hooksPath 2>/dev/null)" || hp=""
+    if [ -n "$hp" ]; then
+        case "$hp" in "~"*) hp="$HOME${hp#\~}" ;; /*) ;; *) hp="$repo/$hp" ;; esac
+        if [ "$(cd "$hp" 2>/dev/null && pwd -P)" != "$(cd "$repo/.git/hooks" && pwd -P)" ]; then
+            echo "[clôture] ⛔ REFUS : core.hooksPath vaut « $(git -C "$repo" config --get core.hooksPath) » pour $repo —" >&2
+            echo "[clôture] git y cherche ses crochets, et celui de ClaudeOS ne tourne pas : le dépôt committerait sans alarme." >&2
+            echo "[clôture] Retire-le (git config --global --unset core.hooksPath, ou sans --global s'il est local), puis relance." >&2
+            return 1
+        fi
+    fi
     return 0
 }
 [ -r "$HOOK_SRC" ] || { echo "[clôture] ⛔ REFUS : $HOOK_SRC introuvable — les shims pointeraient dans le vide." >&2; exit 3; }
-# TABLEAU VIDE SOUS BASH 3.2 — corrigé le 2026-10-01, signalé par la session CLAUDE_OS_TEMPLATE.
+# TABLEAU VIDE SOUS BASH 3.2 — corrigé le 2026-10-01, signalé par une session de projet.
 # Sans aucun dépôt de documents, `_DOCS` est vide, et sous le bash d'Apple avec `set -u` l'expansion
 # `"${_DOCS[@]}"` meurt en « unbound variable » — la clôture s'arrêtait avant tout commit. La forme
 # `${_DOCS[@]+"${_DOCS[@]}"}` rend zéro mot sans erreur et garde intacts les éléments à espaces ;
@@ -110,12 +124,11 @@ _shim_ok "$SYS" || exit 3
 # ÉLARGI À TOUS LES NIVEAUX le 2026-09-17. La boucle ne parcourait que `_DEPOTS`, c'est-à-dire les
 # RACINES — jamais les niveaux de PROJET, qui portent pourtant leur `journal/` et leur `ETAT.md`
 # depuis la bascule du 2026-09-08. Le trou que ce bloc dit fermer restait donc grand ouvert un cran
-# plus bas. MESURÉ : DEUX clôtures refusées le même jour, `CLAUDE_OS_TEMPLATE` puis
-# `<APP>`, chaque fois sur un niveau de projet où des événements avaient
-# été écrits sans reprojection. `niveaux_tous()` d'`etat.py` est la même énumération que celle de
+# plus bas. MESURÉ : DEUX clôtures refusées le même jour, chaque fois sur un niveau de projet où
+# des événements avaient été écrits sans reprojection. `niveaux_tous()` d'`etat.py` est la même énumération que celle de
 # `check --tous`, donc aucune liste en dur n'est introduite ici.
 # UN ETAT.md RETOUCHÉ HORS PROJECTION SE DIT AVANT D'ÊTRE ÉCRASÉ — AVERTIT, ne bloque pas.
-# Arbitrage de l'utilisateur du 2026-10-01, sur une question de la session CLAUDE_OS_TEMPLATE. La
+# Arbitrage du 2026-10-01, sur une question d'une session de projet. La
 # reprojection ci-dessous écrase un `ETAT.md` édité à la main, et le refus 23 du crochet ne voit donc
 # jamais l'édition : elle disparaissait sans un mot. Le DISCRIMINANT est le pied, lu par
 # `pied_conforme` d'`etat.py` — le motif n'est pas recopié ici : un corps qui ne fait plus les M
@@ -229,6 +242,13 @@ _donnees_neuves() {
 _cloture_depot() {
     local repo="$1" nom="$2" rc_alarme="$3" committed=1 _sortie=""
     [ -d "$repo/.git" ] || return 0
+    # Un commit fait pendant un rebase, une fusion ou sur une HEAD détachée n'est sur aucune
+    # branche : rien ne le pousserait, et le démarrage suivant ne le compterait pas.
+    if claudeos_en_suspens "$repo"; then
+        echo "[clôture] ⛔ $nom : un rebase ou une fusion est en cours, ou HEAD est détachée — rien n'est committé ni poussé." >&2
+        echo "[clôture]   git -C $nom status le dit : termine-le (git rebase --continue) ou annule-le (git rebase --abort), puis relance." >&2
+        return 8
+    fi
     if [ -n "$(git -C "$repo" status --porcelain)" ]; then
         echo "[clôture] $nom : $(git -C "$repo" status --porcelain | wc -l | tr -d ' ') changement(s)."
         git -C "$repo" add -A
@@ -317,11 +337,16 @@ _cloture_depot() {
         return 0
     fi
     if [ "${ahead:-0}" -gt 0 ] || [ "$committed" -eq 0 ]; then
-        git -C "$repo" pull --rebase -q 2>/dev/null || echo "[clôture] WARN : pull --rebase impossible sur $nom (hors-ligne ?)." >&2
-        if git -C "$repo" push -q 2>/dev/null; then
+        # L'intégration du distant : `claudeos_integre`, dans `lib_regime.sh`. Elle ne rebase jamais
+        # une fusion, et un conflit s'y annule et rend 8, au lieu d'un rebase laissé en suspens.
+        claudeos_integre "$repo" "$nom" "[clôture]"
+        [ "$?" -eq 8 ] && return 8
+        if _sortie="$(git -C "$repo" push -q 2>&1)"; then
             echo "[clôture] $nom poussé — $(git -C "$repo" log --oneline -1)"
         else
-            echo "[clôture] ⚠ push de $nom ÉCHOUÉ — les commits sont locaux, rien n'est perdu." >&2
+            # Un push échoué est un dépôt NON sauvegardé : il rend 8, comme à la source (2026-10-02).
+            echo "[clôture] ⛔ push de $nom ÉCHOUÉ — les commits sont locaux, rien n'est perdu, rien n'est poussé : ${_sortie%%$'\n'*}" >&2
+            return 8
         fi
     else
         echo "[clôture] $nom : déjà à jour avec le distant."
@@ -401,6 +426,7 @@ for _d in ${_DOCS[@]+"${_DOCS[@]}"}; do
     case "$_rc" in
         0) ;;
         4) RC_WS=4; _ECHECS="$_ECHECS $(_etiq "$_d") (alarme autre que la donnée)" ;;
+        8) [ "$RC_WS" -eq 4 ] || RC_WS=8; _ECHECS="$_ECHECS $(_etiq "$_d") (distant non intégré, rien poussé)" ;;
         *) [ "$RC_WS" -eq 4 ] || RC_WS=$_rc; _ECHECS="$_ECHECS $(_etiq "$_d") (échec de git, sans alarme)" ;;
     esac
 done

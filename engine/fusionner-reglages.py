@@ -46,6 +46,13 @@ def dit(msg, err=False):
     print('[réglages] ' + msg, file=sys.stderr if err else sys.stdout)
 
 
+def meme_dossier(a, b):
+    """Deux écritures d'un chemin désignent-elles le même dossier ? `~` développé, liens résolus."""
+    if not isinstance(a, str) or not isinstance(b, str):
+        return a == b
+    return os.path.realpath(os.path.expanduser(a)) == os.path.realpath(os.path.expanduser(b))
+
+
 def commandes(groupe):
     return [h.get('command', '') for h in groupe.get('hooks', []) if isinstance(h, dict)]
 
@@ -127,12 +134,13 @@ def fusion(objet, fragment, proxy):
                 hooks[evt] += json.loads(json.dumps(groupes))
     if hooks:
         neuf['hooks'] = hooks
-    # 3. La mémoire automatique.
+    # 3. La mémoire automatique. Deux écritures du MÊME dossier ne sont pas un écart : `~/…` contre
+    # le chemin absolu, ou à travers un lien (audit de la v3.0.0, une plomberie bloquée pour rien).
     voulu = fragment.get('autoMemoryDirectory')
     actuel = neuf.get('autoMemoryDirectory')
     if voulu and actuel is None:
         neuf['autoMemoryDirectory'] = voulu
-    elif voulu and actuel != voulu:
+    elif voulu and not meme_dossier(actuel, voulu):
         raise ValueError('autoMemoryDirectory vaut %r, ClaudeOS attend %r : la mémoire de ClaudeOS vit là. '
                          'Rien n\'est écrit — déplacer une mémoire se décide avec la personne.' % (actuel, voulu))
     # 4. Les astuces.
@@ -174,7 +182,7 @@ def ecarts(objet, fragment, proxy):
                          for g in gs if isinstance(g, dict) for c in commandes(g)):
         d.append('PROXY=oui et aucun crochet « %s »' % RTK)
     voulu = fragment.get('autoMemoryDirectory')
-    if voulu and objet.get('autoMemoryDirectory') != voulu:
+    if voulu and not meme_dossier(objet.get('autoMemoryDirectory'), voulu):
         d.append('autoMemoryDirectory vaut %r, ClaudeOS attend %r' % (objet.get('autoMemoryDirectory'), voulu))
     return d
 

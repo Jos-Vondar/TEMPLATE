@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """etat.py — le SEUL chemin d'écriture de l'état d'un niveau.
 
-Geste 2.2 du plan `plans-systeme/2026-09-09-plan-implementation-unifie.md`, qui est la seule
-autorité du contrat. Ce fichier n'en recopie pas le design ; il l'implémente, et les écarts
-décidés à l'écriture sont marqués ÉCART ci-dessous.
+Le contrat est transcrit ci-dessous ; les écarts décidés à l'écriture sont marqués ÉCART.
 
 LE PRINCIPE, et tout découle de lui : un état ne se réécrit jamais, il s'AJOUTE. Le journal
 `<niveau>/journal/AAAA-MM.jsonl` est append-only ; `ETAT.md` en est une PROJECTION, jamais
@@ -545,7 +543,7 @@ def garde_existence(ev, evs, depot):
     le cas que `controles-et-alarmes` fait BLOQUER : une règle existe, le système croit
     l'appliquer, et elle ne se charge jamais. Mesuré le même jour sur les 30 niveaux : 8
     retraits orphelins dans l'historique — 6 soldages à la bascule de fils nés hors journal,
-    1 réparation après le bug d'auto-remplacement, 1 erreur réelle (`ETUDE`, `p-inbox-vault`).
+    1 réparation après le bug d'auto-remplacement, 1 erreur réelle.
     Les deux causes légitimes sont closes ; le refus dur est tranché par l'utilisateur.
 
     CE GARDE NE VIT PAS DANS `valide`, qui juge un événement ISOLÉ : il a besoin du journal.
@@ -790,10 +788,9 @@ def niveaux_tous():
     Les dépôts viennent de `config.sh` — SOURCE UNIQUE, on ne réimplémente pas le discriminant.
 
     LES SOUS-NIVEAUX ONT ÉTÉ AJOUTÉS le 2026-09-09, à l'ouverture de la phase 3. Un dépôt client
-    porte un niveau par app (onze pour <client_a>, décision du 2026-09-08 « un seul écrivain par
-    niveau »), et cette fonction n'en voyait aucun : `check --tous` déclarait le parc conforme
-    sans avoir regardé dix niveaux sur onze, et `vue --tous` — que le démarrage affiche — aurait
-    tu leurs dus. Un contrôle muet rend la même chose qu'un contrôle vert.
+    porte un niveau par app (décision du 2026-09-08 « un seul écrivain par niveau »), et cette
+    fonction n'en voyait aucun : `check --tous` déclarait le parc conforme sans avoir regardé ces
+    niveaux, et `vue --tous` — que le démarrage affiche — aurait tu leurs dus. Un contrôle muet rend la même chose qu'un contrôle vert.
 
     LE DISCRIMINANT EST LA PRÉSENCE D'UN `ETAT.md`, jamais une liste : un niveau qui n'a pas
     basculé n'a rien à vérifier ici, et un niveau qui bascule est vu sans qu'on touche à ce code.
@@ -808,9 +805,15 @@ def niveaux_tous():
         mourir(1, f"claudeos_racines a échoué ({cfg}) : {r.stderr.strip()[:200]}")
     depots = [l for l in r.stdout.splitlines() if l.strip() and os.path.isdir(l)]
     tous = list(depots)
+    systeme = os.path.realpath(os.path.expanduser("~/.claude"))
     for d in depots:
         # Profondeur 3 : projet, puis application. `.git` et les réceptacles exclus.
-        for prof in ("*", "*/*", "*/*/*"):
+        profs = ["*", "*/*", "*/*/*"]
+        # En dépôt unique et sans git, les domaines vivent sous `travail/` du système : une
+        # application y est à la profondeur 4, et restait invisible (audit de la v3.0.0).
+        if os.path.realpath(d) == systeme:
+            profs.append(os.path.join("travail", "*", "*", "*"))
+        for prof in profs:
             for etat in glob.glob(os.path.join(d, prof, "ETAT.md")):
                 niv = os.path.dirname(etat)
                 if any(p in ("_IGNORE", "extracted", "node_modules") or p.startswith(".")

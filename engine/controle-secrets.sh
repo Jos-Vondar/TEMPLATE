@@ -19,7 +19,8 @@
 # rien n'est désactivé, et ça se corrige quand on le voit. Bloquer ferait payer un défaut
 # de rangement par l'impossibilité de sauvegarder.
 #
-# Code retour : 0 rien à signaler · 1 au moins un fichier à classer.
+# Code retour : 0 rien à signaler · 1 au moins un fichier à classer · 2 NON MESURÉ, le balayage
+# n'a pas pu regarder (le 1 l'emporte s'il a quand même trouvé quelque chose).
 #
 # Emplacements AUTORISÉS, donc exclus — les deux régimes de `secrets-detail` :
 #   ~/.claude/secrets-shared/  faible valeur, suivi au dépôt système ;
@@ -41,8 +42,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
 # absolue, ce que fait la clôture — le défaut était donc invisible depuis le seul chemin qui
 # compte, et le contrôle s'accusait lui-même dès qu'on le lançait à la main.
 # DEUXIÈME FORME DU MÊME DÉFAUT, corrigée le 2026-09-22 — l'exclusion par CHEMIN ne mord pas
-# depuis la migration sur Mac. `$SELF` est le chemin RÉSOLU
-# (`~/Documents/ClaudeOS/.claude/engine`), tandis que `find -L "$HOME/.claude"` rend le chemin
+# quand `~/.claude` est un lien. `$SELF` est le chemin RÉSOLU
+# (`<dossier réel>/engine`), tandis que `find -L "$HOME/.claude"` rend le chemin
 # PAR LE LIEN (`~/.claude/engine`). Deux chaînes différentes pour le même fichier : `-not -path`
 # ne pouvait donc jamais s'appliquer, et le contrôle s'accusait lui-même à CHAQUE clôture —
 # un avertissement permanent, c'est-à-dire un avertissement qu'on apprend à ignorer.
@@ -67,11 +68,19 @@ while IFS= read -r _w; do [ -n "$_w" ] && _WS+=("$_w"); done < <(claudeos_ws_roo
 _claudeos_scan_secrets() {
     # `$HOME/workstations/docs` est SORTI le 2026-09-08 : le monodépôt de travail est découpé, et
     # le `docs/` de chaque client est déjà couvert par sa racine dans `_WS`.
-    # TABLEAU VIDE SOUS BASH 3.2 — corrigé le 2026-10-01, signalé par la session CLAUDE_OS_TEMPLATE.
+    # TABLEAU VIDE SOUS BASH 3.2 — corrigé le 2026-10-01, signalé par une session de projet.
     # Sans aucun dossier de travail, `"${_WS[@]}"` mourait en « unbound variable » sous le bash d'Apple
     # avec `set -u` : le sous-shell de `_hits=$( … )` s'arrêtait avant même `~/.claude`, et le contrôle
     # concluait « ✅ aucune valeur de secret » sur une ERREUR. La forme ci-dessous rend zéro mot sans
     # erreur et garde intacts les éléments à espaces.
+    # VERDICT SUR ERREUR, LA CLASSE ENTIÈRE — corrigé le 2026-10-01.
+    # Le tableau vide n'était qu'UNE mort silencieuse : toute autre mort du tube rendait le même vide,
+    # donc le même « ✅ ». Le parcours rend désormais le pire code de `find`, dont l'erreur n'est plus
+    # jetée — on lit son code, on ne cache pas ce qu'il dit ; le lecteur finit par une SENTINELLE qui
+    # compte les fichiers lus, et l'appelant juge les deux AVANT de conclure. `head -10` est sorti du
+    # tube : en le refermant il tuait le parcours d'un SIGPIPE, indiscernable d'une vraie mort ; la
+    # troncature se fait à l'affichage.
+    ( _e=0
     for _root in "$HOME/.claude" ${_WS[@]+"${_WS[@]}"}; do
         [ -d "$_root" ] || continue
 # PORTABILITE, 2026-09-12 — `find -L`, ET CE N'EST PAS COSMETIQUE. Depuis la migration sur le Mac,
@@ -104,12 +113,15 @@ _claudeos_scan_secrets() {
             -not -path "$HOME/.claude/ide/*" \
             -not -name ".credentials.json" \
             -not -name "history.jsonl" \
-            2>/dev/null
-    done | while IFS= read -r _f; do
+            || _e=$?
+    done
+    exit "$_e" ) | { _lus=0
+    while IFS= read -r _f; do
         # Fichiers texte seulement. `grep -I` et non `file` : `file` n'est pas installé sur
         # ce poste, son mime vide tombait dans la branche par défaut, et TOUS les fichiers
         # étaient sautés — un garde de secrets qui ne gardait rien, sans jamais le dire.
         if [ -s "$_f" ] && ! grep -Iq . "$_f" 2>/dev/null; then continue; fi
+        _lus=$((_lus + 1))
         # (a) le CONTENU porte une forme d'éditeur (casse exacte) ou un mot-clé suivi d'une valeur
         if grep -lE  "$CLAUDEOS_SECRET_RE_FORMES" "$_f" >/dev/null 2>&1 \
         || grep -liE "$CLAUDEOS_SECRET_RE_MOTS"   "$_f" >/dev/null 2>&1; then
@@ -126,16 +138,48 @@ _claudeos_scan_secrets() {
                  && grep -vE '^\s*#|^\s*$' "$_f" 2>/dev/null | grep -qE '[^[:space:]]{20,}' \
                  && echo "${_f#$HOME/} : nom + valeur plausible" ;;
         esac
-    done | head -10
+    done
+    printf '%s %s\n' "$_FIN36" "$_lus"; }
 }
-_hits=$(_claudeos_scan_secrets)
+# La sentinelle : DERNIÈRE ligne du lecteur, suivie du nombre de fichiers texte lus.
+_FIN36="@@controle-36-fin@@"
+# MOTIFS COMPRIS PAR CE GREP. Un motif qu'il refuse rend 2 sur chaque fichier, et le balayage, qui
+# ne teste que le succès, lirait 2 comme « rien trouvé » — un vert sur une erreur, encore.
+_motifs_ko=""
+for _v in CLAUDEOS_SECRET_RE_FORMES CLAUDEOS_SECRET_RE_MOTS CLAUDEOS_SECRET_NAME_RE; do
+    if [ -z "${!_v:-}" ]; then _motifs_ko="$_motifs_ko $_v (vide)"; continue; fi
+    grep -E -- "${!_v}" </dev/null >/dev/null; [ "$?" -le 1 ] || _motifs_ko="$_motifs_ko $_v"
+done
+_hits=$(_claudeos_scan_secrets); _rc=$?
+_der="${_hits##*$'\n'}"; _lus=""
+case "$_der" in
+    "$_FIN36 "*)
+        _lus="${_der#"$_FIN36 "}"
+        case "$_hits" in *$'\n'*) _hits="${_hits%$'\n'*}" ;; *) _hits="" ;; esac ;;
+esac
+case "$_lus" in ''|*[!0-9]*) _lus="" ;; esac
 
+_sortie=0
 if [ -n "$_hits" ]; then
+    _nb=$(printf '%s\n' "$_hits" | wc -l | tr -d ' ')
     echo "[selftest] ⚠ secret(s) hors emplacement autorisé — à classer, pas à ignorer :" >&2
-    echo "$_hits" | sed 's/^/       /' >&2
+    # `awk` et non `head` : `head` refermerait le tube sur `printf`, qui l'annoncerait sur STDERR.
+    printf '%s\n' "$_hits" | awk 'NR<=10' | sed 's/^/       /' >&2
+    [ "$_nb" -gt 10 ] && echo "       … et $((_nb - 10)) autre(s)." >&2
     echo "       Faible valeur → ~/.claude/secrets-shared/ ; haute valeur → un _IGNORE/ ou hors arbre." >&2
     echo "       Faux positif ? Ce contrôle avertit et ne bloque rien : la clôture continue." >&2
-    exit 1
+    _sortie=1
 fi
-echo "[selftest] ✅ aucune valeur de secret hors de secrets-shared/ et des _IGNORE/ (arbre entier, zones non sauvegardées comprises)"
-exit 0
+# « Je n'ai pas pu regarder » n'est pas « il n'y a rien » : NON MESURÉ, jamais vert.
+if [ "$_rc" -ne 0 ] || [ -z "$_lus" ] || [ -n "$_motifs_ko" ]; then
+    echo "[selftest] ⚠ 36 NON MESURÉ — le balayage n'est pas allé au bout : « aucune valeur de secret » n'est PAS établi." >&2
+    [ "$_rc" -ne 0 ] && echo "       code de sortie du balayage : $_rc — find ou le lecteur a échoué, son erreur est au-dessus." >&2
+    [ -z "$_lus" ] && echo "       sentinelle de fin absente : le lecteur est mort avant d'avoir tout lu." >&2
+    [ -n "$_motifs_ko" ] && echo "       motif(s) refusé(s) par ce grep :$_motifs_ko — voir engine/config.sh." >&2
+    [ "$_sortie" -eq 1 ] || _sortie=2
+elif [ "$_lus" -eq 0 ]; then
+    echo "[selftest] ⚠ 36 NON MESURÉ — aucun fichier texte lu : un garde qui ne regarde rien répond toujours « rien »." >&2
+    [ "$_sortie" -eq 1 ] || _sortie=2
+fi
+[ "$_sortie" -eq 0 ] && echo "[selftest] ✅ aucune valeur de secret hors de secrets-shared/ et des _IGNORE/ (arbre entier, zones non sauvegardées comprises — $_lus fichiers texte lus)"
+exit "$_sortie"

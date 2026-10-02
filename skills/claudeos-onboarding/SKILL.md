@@ -6,7 +6,7 @@ description: Rejouer l'entretien d'installation de ClaudeOS — changer une rép
 # Rejouer l'entretien
 
 > Fiche situationnelle. Une procédure, deux entrées : l'agent livré, en mode « rejouer
-> l'entretien » (`cd ~/.claude && claude --permission-mode auto --agent claudeos-installateur`), et cette compétence, dans
+> l'entretien » (`cd ~/.claude && claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur`), et cette compétence, dans
 > une session ordinaire. **La procédure vit dans `~/.claude/installateur/ENTRETIEN.md`, seule
 > autorité** : cette fiche ne la recopie pas.
 

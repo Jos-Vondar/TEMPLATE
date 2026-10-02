@@ -20,9 +20,25 @@
 # « dotnet: not found » (constaté le 2026-08-12). Ici plutôt que dans ~/.bashrc,
 # qui n'est pas sauvegardé.
 # Garde d'existence : un poste peut ne pas avoir .NET, le lancement ne doit pas casser.
-if [ -d "$HOME/.dotnet" ]; then
+# LA GARDE TESTE L'EXÉCUTABLE, PLUS LE DOSSIER — corrigé le 2026-10-01. Sous macOS, `~/.dotnet`
+# existe SANS SDK quand .NET vient de l'installeur officiel : le CLI y range ses caches et `tools/`, le
+# runtime vit sous `/usr/local/share/dotnet`. `DOTNET_ROOT` pointait donc un dossier vide de runtime,
+# et tout outil .NET mourait sur « You must install .NET to run this application » : la variable fait
+# sauter l'emplacement par défaut (Microsoft Learn, « Troubleshoot app launch failures »). Les deux
+# ajouts au PATH ne se répètent pas quand le fichier est re-sourcé.
+if [ -x "$HOME/.dotnet/dotnet" ]; then
     export DOTNET_ROOT="$HOME/.dotnet"
-    export PATH="$DOTNET_ROOT:$PATH"
+    case ":$PATH:" in *":$DOTNET_ROOT:"*) ;; *) export PATH="$DOTNET_ROOT:$PATH" ;; esac
+elif [ "${DOTNET_ROOT:-}" = "$HOME/.dotnet" ]; then
+    # La même valeur périmée, HÉRITÉE : un serveur tmux démarré avant la correction la transmet à
+    # chaque fenêtre. Elle seule se retire — un `DOTNET_ROOT` posé ailleurs n'est pas touché.
+    unset DOTNET_ROOT
+fi
+# Outils globaux .NET. L'installeur de macOS écrit `~/.dotnet/tools` TEL QUEL dans
+# `/etc/paths.d/dotnet-cli-tools`, et le tilde n'y est pas développé : on l'ajoute ici, en absolu,
+# sans toucher à ce fichier système.
+if [ -d "$HOME/.dotnet/tools" ]; then
+    case ":$PATH:" in *":$HOME/.dotnet/tools:"*) ;; *) export PATH="$PATH:$HOME/.dotnet/tools" ;; esac
 fi
 
 # --- tmux : pointeur local vers la config du dépôt ---
