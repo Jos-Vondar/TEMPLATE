@@ -2,18 +2,10 @@
 # =============================================================================
 # controle-secrets.sh — « un secret hors de son emplacement autorisé ».
 #
-# Transplanté le 2026-08-22 (étape 4.3/4.5) depuis `selftest.sh` contrôle 36, dont
-# il garde le bandeau `[selftest] 36.` pour rester retrouvable. Il ne va PAS au hook
-# pre-commit, sur décision de l'utilisateur : il regarde l'ARBRE VIVANT ENTIER, zones
-# hors dépôt comprises, ce qu'un hook ne voit jamais. Il reste au rythme de la clôture,
-# ~1 s mesurée le 2026-08-22 (l'en-tête annonçait « ~20 s assumées », faux d'un facteur 20 —
-# c'est ce chiffre qui avait servi à arbitrer l'emplacement de ce contrôle). L'arbitrage tient
-# quand même : le scan porte sur l'arbre entier, y compris hors dépôt, ce que le hook ne voit pas.
-#
-# Classe de défaut, constatée le 2026-08-03 : une valeur de secret vivait dans un
-# dossier de compétence. Les alarmes du commit ne peuvent pas la voir — elles
-# inspectent ce qui est MIS EN FILE. Un secret mal rangé dans une zone que le dépôt
-# ignore est parfaitement invisible pour elles.
+# Il garde le bandeau `[selftest] 36.` pour rester retrouvable. Il ne va PAS au hook
+# pre-commit : il regarde l'ARBRE VIVANT ENTIER, zones hors dépôt comprises, ce qu'un hook ne
+# voit jamais — les alarmes du commit n'inspectent que ce qui est MIS EN FILE, et un secret
+# mal rangé dans une zone que le dépôt ignore leur est invisible. Lancé à la clôture.
 #
 # AVERTIT, ne bloque pas. Ce n'est pas une fuite, c'est un rangement : rien n'est parti,
 # rien n'est désactivé, et ça se corrige quand on le voit. Bloquer ferait payer un défaut
@@ -35,23 +27,10 @@
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
 
-# Ce script s'exclut lui-même : son nom porte le mot qu'il cherche, et il contient les motifs.
-# CORRIGÉ le 2026-08-22. L'exclusion valait `-not -path "${BASH_SOURCE[0]}"` — le chemin TEL
-# QU'APPELÉ, donc relatif quand on lance `bash engine/controle-secrets.sh`, alors que `find`
-# produit toujours l'absolu. L'exclusion ne mordait que lorsque l'appelant employait la forme
-# absolue, ce que fait la clôture — le défaut était donc invisible depuis le seul chemin qui
-# compte, et le contrôle s'accusait lui-même dès qu'on le lançait à la main.
-# DEUXIÈME FORME DU MÊME DÉFAUT, corrigée le 2026-09-22 — l'exclusion par CHEMIN ne mord pas
-# quand `~/.claude` est un lien. `$SELF` est le chemin RÉSOLU
-# (`<dossier réel>/engine`), tandis que `find -L "$HOME/.claude"` rend le chemin
-# PAR LE LIEN (`~/.claude/engine`). Deux chaînes différentes pour le même fichier : `-not -path`
-# ne pouvait donc jamais s'appliquer, et le contrôle s'accusait lui-même à CHAQUE clôture —
-# un avertissement permanent, c'est-à-dire un avertissement qu'on apprend à ignorer.
-# La correction du 2026-08-22 visait déjà ce défaut sous sa forme « relatif contre absolu » ;
-# les liens du Mac en ont ouvert une seconde. On exclut donc par NOM DE BASE, qui ne dépend ni
-# du poste, ni des liens, ni de la façon dont l'appelant a écrit le chemin.
-# COMPROMIS ASSUMÉ : un fichier homonyme ailleurs dans l'arbre serait ignoré lui aussi. Ce ne
-# pourrait être qu'une copie de ce script, donc sans secret propre à signaler.
+# Ce script s'exclut lui-même PAR NOM DE BASE, pas par chemin : le chemin tel qu'appelé peut être
+# relatif, et le chemin résolu diffère de celui que `find -L` rend par un lien — une exclusion par
+# `-not -path` ne mordrait pas, et le contrôle s'accuserait lui-même à chaque clôture.
+# COMPROMIS ASSUMÉ : un homonyme ailleurs serait ignoré aussi ; ce ne pourrait être qu'une copie.
 _MOI_NOM="$(basename "${BASH_SOURCE[0]}")"
 
 echo "[selftest] 36. Secret hors de son emplacement autorisé, y compris en zone non sauvegardée (avertissement)"
@@ -59,36 +38,22 @@ echo "[selftest] 36. Secret hors de son emplacement autorisé, y compris en zone
 _WS=()
 while IFS= read -r _w; do [ -n "$_w" ] && _WS+=("$_w"); done < <(claudeos_ws_roots)
 
-# PORTABILITÉ, 2026-09-12 : ce balayage vivait DANS un `_hits=$( … )`, et il porte un `case` dont
-# le motif `*.md)` referme, aux yeux du parseur de bash 3.2, la substitution ouverte par `$(`. Sous le
-# bash d'Apple le fichier ne s'analysait même plus : bandeau affiché, puis mort — et l'échec était
-# avalé par le `|| true` de la clôture, donc le contrôle 36 disparaissait sans un mot. Le corps d'une
-# FONCTION échappe à ce balayage de parenthèses. Rien d'autre ne change, et l'idiome vaut pour bash 5
-# comme pour le 3.2 : le PC sous WSL exécute le même fichier.
+# Le balayage vit dans une FONCTION et non dans un `_hits=$( … )` : son `case … *.md)` refermerait,
+# pour le parseur de bash 3.2 de macOS, la substitution ouverte par `$(` — le fichier ne
+# s'analyserait plus, et la clôture avalerait l'échec.
 _claudeos_scan_secrets() {
-    # `$HOME/workstations/docs` est SORTI le 2026-09-08 : le monodépôt de travail est découpé, et
-    # le `docs/` de chaque client est déjà couvert par sa racine dans `_WS`.
-    # TABLEAU VIDE SOUS BASH 3.2 — corrigé le 2026-10-01, signalé par une session de projet.
-    # Sans aucun dossier de travail, `"${_WS[@]}"` mourait en « unbound variable » sous le bash d'Apple
-    # avec `set -u` : le sous-shell de `_hits=$( … )` s'arrêtait avant même `~/.claude`, et le contrôle
-    # concluait « ✅ aucune valeur de secret » sur une ERREUR. La forme ci-dessous rend zéro mot sans
-    # erreur et garde intacts les éléments à espaces.
-    # VERDICT SUR ERREUR, LA CLASSE ENTIÈRE — corrigé le 2026-10-01.
-    # Le tableau vide n'était qu'UNE mort silencieuse : toute autre mort du tube rendait le même vide,
-    # donc le même « ✅ ». Le parcours rend désormais le pire code de `find`, dont l'erreur n'est plus
-    # jetée — on lit son code, on ne cache pas ce qu'il dit ; le lecteur finit par une SENTINELLE qui
-    # compte les fichiers lus, et l'appelant juge les deux AVANT de conclure. `head -10` est sorti du
-    # tube : en le refermant il tuait le parcours d'un SIGPIPE, indiscernable d'une vraie mort ; la
-    # troncature se fait à l'affichage.
+    # `${_WS[@]+"${_WS[@]}"}` : un tableau vide meurt en « unbound variable » sous bash 3.2 avec
+    # `set -u` ; cette forme rend zéro mot sans erreur et garde les éléments à espaces.
+    # VERDICT SUR ERREUR : toute mort du tube rendrait le même vide, donc un faux « ✅ ». Le
+    # parcours rend le pire code de `find`, dont l'erreur n'est pas jetée ; le lecteur finit par
+    # une SENTINELLE qui compte les fichiers lus, et l'appelant juge les deux AVANT de conclure.
+    # Pas de `head` dans le tube : son SIGPIPE tuerait le parcours ; on tronque à l'affichage.
     ( _e=0
     for _root in "$HOME/.claude" ${_WS[@]+"${_WS[@]}"}; do
         [ -d "$_root" ] || continue
-# PORTABILITE, 2026-09-12 — `find -L`, ET CE N'EST PAS COSMETIQUE. Depuis la migration sur le Mac,
-# les racines de depot sont des LIENS SYMBOLIQUES (`~/<DÉPÔT>` -> un dossier réel ailleurs).
-# `find` NE SUIT PAS un lien donne en argument sans `-L` : le balayage rendait ZERO fichier sur 567,
-# et le controle concluait au vert. Mesure du jour : 0 contre 567. Un garde qui ne regarde rien
-# repond toujours « rien a signaler ». `-L` est POSIX et sans effet quand la racine est un vrai
-# dossier, donc neutre sur le PC sous WSL.
+# `find -L` : les racines de dépôt peuvent être des LIENS, et `find` ne suit pas un lien donné en
+# argument sans `-L` — il rendrait zéro fichier et le contrôle conclurait au vert. Neutre sur un
+# vrai dossier.
         find -L "$_root" -type f \
             -not -path "*/_IGNORE/*" \
             -not -path "$HOME/.claude/secrets-shared/*" \
@@ -117,9 +82,8 @@ _claudeos_scan_secrets() {
     done
     exit "$_e" ) | { _lus=0
     while IFS= read -r _f; do
-        # Fichiers texte seulement. `grep -I` et non `file` : `file` n'est pas installé sur
-        # ce poste, son mime vide tombait dans la branche par défaut, et TOUS les fichiers
-        # étaient sautés — un garde de secrets qui ne gardait rien, sans jamais le dire.
+        # Fichiers texte seulement. `grep -I` et non `file` : sans `file` installé, le mime vide
+        # ferait sauter TOUS les fichiers — un garde qui ne garde rien, sans le dire.
         if [ -s "$_f" ] && ! grep -Iq . "$_f" 2>/dev/null; then continue; fi
         _lus=$((_lus + 1))
         # (a) le CONTENU porte une forme d'éditeur (casse exacte) ou un mot-clé suivi d'une valeur

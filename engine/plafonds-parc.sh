@@ -1,29 +1,18 @@
 #!/usr/bin/env bash
 # plafonds-parc.sh — quels fichiers d'état dépassent leur plafond, sur TOUT le parc.
 #
-# POURQUOI CE SCRIPT EXISTE, et pourquoi il n'est PAS un contrôle de `weekly-check.sh`.
-# Le contrôle 29 mesurait le parc ; il a été retiré le 2026-09-08 (geste 2.7). Depuis, seul le
-# crochet de commit mesure — et il ne voit que ce qu'on met en file, donc jamais le parc. L'audit
-# du 2026-09-09 a relevé le trou. Arbitrage de l'utilisateur le même jour, variante (a) :
-# un script appelé par la passe hebdomadaire, HORS `weekly-check.sh`. Motif du hors-contrôle :
-# `CLAUDEOS_CLIQUET_CONTROLES` est à sa borne exacte, donc un contrôle de plus n'entre qu'en
-# faisant sortir un autre — et aucun ne le méritait.
-# CE QUE ÇA COÛTE, écrit pour que personne ne le redécouvre : le parc n'est mesuré qu'au commit
-# (par fichier, contrôle 8) et à la passe (ici, en entier). Jamais en continu.
+# Le crochet de commit (contrôle 8) ne mesure que ce qu'on met en file, jamais le parc entier :
+# ce script le fait, à la passe, HORS `weekly-check.sh`. Le parc n'est donc mesuré qu'au commit
+# (par fichier) et à la passe (en entier), jamais en continu.
 #
-# LES COMMENTAIRES HTML SONT EXCLUS, et ce n'est pas cosmétique : le contrôle 29 les excluait, le
-# crochet qui lui survit ne le fait pas. Mesuré le 2026-09-09 — trois fichiers du parc passent
-# sous leur plafond une fois l'en-tête de commentaire retiré. Les compter ferait verser du texte
-# utile pour un défaut de méthode. Les deux mesures sont donc affichées, brute et nette.
+# DEUX MESURES, brute et nette : la nette exclut les commentaires HTML, que le crochet compte. Un
+# fichier au-dessus en brut seulement a un en-tête, pas de contenu à verser.
 #
-# LES FICHIERS GELÉS SONT EXCLUS, et c'est ce qui rend ce script utile après la phase 3. Un fichier
-# dont la première ligne porte l'en-tête de gel est en LECTURE SEULE — le contrôle 14 du crochet
-# refuse toute modification (code 24). Le mesurer contre un plafond demande un allègement que la
-# machine interdit. Mesuré le 2026-09-09 à la passe de ménage : les ONZE fichiers signalés étaient
-# gelés, soit 100 % de faux positifs, tous nés de la bascule du jour même. Un signal dont on sait
-# qu'il ne faut pas l'écouter fait ignorer la catégorie entière (`controles-et-alarmes`).
+# LES FICHIERS GELÉS SONT EXCLUS : en lecture seule (le crochet refuse toute modification, code
+# 24), ils demanderaient un allègement interdit — un faux positif certain, qui ferait ignorer la
+# catégorie entière.
 #
-# UNITÉ : le CARACTÈRE, jamais l'octet (~3 % d'écart sur du français, et ce système l'a déjà payé).
+# UNITÉ : le CARACTÈRE, jamais l'octet (environ 3 % d'écart sur du français).
 # La valeur de chaque plafond se relit dans `engine/config.sh`, elle ne se recopie pas ici.
 set -uo pipefail
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config.sh"
@@ -41,11 +30,8 @@ for _r in $(claudeos_racines); do
         # gelé = lecture seule, donc pas d'allègement possible : hors mesure (voir en-tête)
         case "$(head -1 "$_full")" in '> **GELÉ'*) _gel=$((_gel + 1)); continue ;; esac
         _vus=$((_vus + 1))
-        # COMPTE PAR python3, POSÉ LE 2026-09-22. `wc -m` rend le bon compte sur ce Mac —
-        # mesuré, `C.UTF-8` y existe et GNU comme BSD la respectent, donc ce n'est PAS une
-        # panne réparée ici. Le motif est la DÉPENDANCE : le résultat tenait à quel `wc` le
-        # PATH résout, à quelle locale et à quelle implémentation, trois variables dont
-        # aucune n'est maîtrisée dans un hook. `python3` est déjà exigé par le moteur.
+        # Compté par python3 et non `wc -m` : le résultat de `wc` dépend du binaire que le PATH
+        # résout et de la locale, deux variables non maîtrisées. `python3` est déjà exigé.
         _brut="$(python3 -c "import sys;print(len(open(sys.argv[1],encoding='utf-8',errors='surrogateescape').read()))" "$_full")"
         _net="$(python3 -c "import re,sys;print(len(re.sub(r'<!--.*?-->','',open(sys.argv[1],encoding='utf-8').read(),flags=re.S)))" "$_full")"
         if [ "$_brut" -gt "$_p" ] || [ "$_net" -gt "$_p" ]; then

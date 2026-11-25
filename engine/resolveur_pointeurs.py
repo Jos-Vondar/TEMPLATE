@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Résolveur des cibles de pointeurs de la carte — SOURCE UNIQUE, importée par DEUX appelants.
 
-SORTI le 2026-09-10 du bloc Python inline du contrôle hebdomadaire 45, geste D1 du plan de
-correction de l'audit du même jour. MOTIF, et il est écrit dans `config.sh` au commentaire de
-`claudeos_plafond_de` : un même calcul en deux implantations dérive, et c'est la dérive qui produit
-un contrôle qui dit vert quand l'autre dit rouge.
+Un même calcul en deux implantations dérive, et c'est la dérive qui produit un contrôle qui dit
+vert quand l'autre dit rouge : d'où une seule implantation, ici.
 
 LES DEUX APPELANTS, et ils ne font PAS la même chose :
 
@@ -15,9 +13,8 @@ LES DEUX APPELANTS, et ils ne font PAS la même chose :
   résout pas, donc le faux n'entre jamais. Il importe `juge_cibles`.
 
 POURQUOI LE REFUS EST À L'`add` ET JAMAIS AU `projette` : le journal est append-only. Un `projette`
-qui refuserait rendrait le niveau IMPROJETABLE dès le premier pointeur mort déjà écrit — et il y en
-avait deux le 2026-09-09, réaffirmés par la projection à chaque passage. C'est le constat R-2 de
-l'audit, et sa racine : un générateur qui ne connaît pas le disque réaffirme du faux.
+qui refuserait rendrait le niveau IMPROJETABLE dès le premier pointeur mort déjà écrit. Le refus
+à l'`add` empêche le faux d'entrer ; un générateur qui ne connaît pas le disque le réaffirmerait.
 
 CE QUI EST JUGÉ, ET RIEN D'AUTRE : les compétences citées (`compétence <slug>` / `skill <slug>`),
 les chemins, et la forme `FICHIER « Section »` — fichier ET titre. NE SONT PAS JUGÉS, et le compte
@@ -36,8 +33,8 @@ MEM_DEFAUT = os.path.join(HOME, ".claude", "memory")
 EXT = (".md", ".sh", ".json", ".yaml", ".yml", ".ps1", ".py", ".txt")
 
 # Dossiers sautés au balayage : du runtime ou du transcript, jamais une cible de pointeur.
-SKIP = {".git", "node_modules", "__pycache__", ".sync-backups", "plugins",
-        "todos", "shell-snapshots", "statsig", "ide", "projects", ".venv"}
+SKIP = {".git", "node_modules", "__pycache__", "plugins", "shell-snapshots", "projects",
+        "file-history", "session-env", "backups", ".venv"}
 
 _cache = {}
 
@@ -46,15 +43,13 @@ def _arbre(mem):
     """Chemins de l'arbre balayé, calculés UNE fois par processus.
 
     Les dépôts clients se DÉCOUVRENT par leur discriminant — un `CLAUDE.md` à leur racine —
-    jamais par une liste de noms : une liste en dur périme au premier client, et c'est
-    exactement ce que `workstations` a fait ici.
+    jamais par une liste de noms : une liste en dur périme au premier client.
     """
     if mem in _cache:
         return _cache[mem]
     clients = [os.path.join(HOME, d) for d in sorted(os.listdir(HOME))
                if not d.startswith(".") and os.path.isfile(os.path.join(HOME, d, "CLAUDE.md"))]
-    roots = [os.path.join(HOME, p) for p in (".claude", ".claudeos", "resources", "docs")]
-    roots += clients + [mem]
+    roots = [os.path.join(HOME, ".claude")] + clients + [mem]
     paths = set()
     for r in roots:
         if not os.path.isdir(r):
@@ -63,7 +58,7 @@ def _arbre(mem):
             dns[:] = [d for d in dns if d not in SKIP]
             for n in list(dns) + fns:
                 paths.add(os.path.join(dp, n))
-    ancres = [HOME, os.path.join(HOME, ".claude"), os.path.join(HOME, ".claudeos"), mem]
+    ancres = [HOME, os.path.join(HOME, ".claude"), mem]
     _cache[mem] = (paths, ancres)
     return _cache[mem]
 
@@ -71,10 +66,8 @@ def _arbre(mem):
 def resout(c, mem=MEM_DEFAUT):
     """Vrai si le chemin cité existe, par ancre ou par correspondance de FIN.
 
-    2026-08-22 : les accents graves sont retirés AVANT toute résolution. La carte les emploie
-    sur une partie de ses pointeurs et pas sur l'autre ; sans ce strip, les pointeurs entourés
-    d'accents ne ressemblaient à aucun chemin et tombaient en « non jugés » — 43 sur 163, soit
-    un quart de la couche jamais contrôlé, EN SILENCE.
+    Les accents graves sont retirés AVANT toute résolution : la carte les emploie sur une partie
+    de ses pointeurs seulement, et un pointeur entre accents tomberait en « non jugé », EN SILENCE.
     """
     paths, ancres = _arbre(mem)
     c = c.strip().strip("`").strip().rstrip("/")
@@ -101,11 +94,9 @@ def resout(c, mem=MEM_DEFAUT):
     return False
 
 
-# D3 de l'audit du 2026-09-16, posé le 2026-09-17. Le contrôle savait qu'une cible EXISTE ; il ne
-# savait pas si elle est VIVANTE. V-1 : trois questions d'état pointaient des `MEMORY.md` et des
-# `HANDOFF.md` GELÉS le 2026-09-09, donc figés. Le contrôle rendait vert : le fichier existait.
-# Corrigés un à un par A3 le 2026-09-16 ; ceci empêche la régression, qui est certaine autrement —
-# le gel a figé 22 fichiers de reprise et 11 `MEMORY.md` d'un coup, et rien ne relit les pointeurs.
+# Une cible qui EXISTE n'est pas forcément VIVANTE : une question d'état (« en cours », « que
+# reste-t-il ») renvoyée vers un fichier GELÉ rend une réponse figée, et l'existence seule
+# rendrait vert.
 QUESTION_VIVANTE = re.compile(
     r"en cours|reste[- ]t[- ]il|reste à faire|où en est|qu['’]est-ce qui reste|avancement|statut actuel",
     re.I)
@@ -134,7 +125,7 @@ def chemin_resolu(c, mem=MEM_DEFAUT):
 
 
 def est_gele(chemin):
-    """Vrai si le fichier porte l'en-tête de gel en tête. Forme posée le 2026-09-08."""
+    """Vrai si le fichier porte l'en-tête de gel en tête."""
     try:
         with open(chemin, encoding="utf-8") as f:
             for ligne in f:
@@ -158,7 +149,7 @@ def section_existe(nom_fichier, titre):
 
     Correspondance par PRÉFIXE dans les DEUX sens : la carte tronque souvent un titre long à
     sa virgule, et un titre peut avoir gagné une queue depuis que le pointeur a été écrit.
-    LIMITE CONNUE, mesurée à l'épreuve du 2026-08-22 : un titre AUGMENTÉ d'un suffixe passe,
+    LIMITE CONNUE : un titre AUGMENTÉ d'un suffixe passe,
     parce qu'il est indiscernable d'une citation tronquée. Le contrôle attrape le renommage et
     la suppression, PAS l'ajout en queue. C'est le prix de la troncature, et il est assumé.
     """
@@ -177,10 +168,9 @@ def juge_item(item, mem=MEM_DEFAUT, vivante=False):
     """
     item = re.sub(r"\s*\([^)]*\)", "", item).strip()   # parenthèse d'aparté
 
-    # (a) FICHIER « Section » — le fichier ET le titre doivent exister. C'était la première
-    # cause de « non jugé » — 27 des 43 — parce qu'un item finissant par « » ne ressemble ni à
-    # un chemin ni à une compétence. Or c'est précisément la classe de renvoi qui a été tuée en
-    # masse le 2026-08-19 quand `DESIGN.md` a perdu sa numérotation.
+    # (a) FICHIER « Section » — le fichier ET le titre doivent exister. Un item finissant par « »
+    # ne ressemble ni à un chemin ni à une compétence, et c'est la classe de renvoi qu'un
+    # renumérotage tue en masse.
     sec = re.search(r"«\s*(.+?)\s*»", item)
     if sec:
         f = re.search(r"`?([A-Za-z_]+\.md)`?", item)
@@ -239,9 +229,8 @@ def _principal(argv):
         txt = open(idx, encoding="utf-8").read()
     except OSError:
         return 0
-    # REBRANCHÉ le 2026-09-08 sur `## Où trouver` d'`ETAT.md`. Il lisait la couche curatée de
-    # `memory/INDEX.md`, GELÉE depuis : un contrôle qui juge un fichier figé finit par crier sur
-    # de l'histoire, et c'est arrivé le jour même.
+    # Lit `## Où trouver` d'`ETAT.md`, la couche vivante, jamais un index gelé : un contrôle qui
+    # juge un fichier figé finit par crier sur de l'histoire.
     m = re.search(r"^## Où trouver\n(.*?)(?=^## |^---$|\Z)", txt, re.M | re.S)
     curated = m.group(1) if m else ""
     if not curated.strip():

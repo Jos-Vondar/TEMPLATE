@@ -1,6 +1,9 @@
 {
   "_claudeos": "Fragment de réglages du template, FUSIONNÉ dans ~/.claude/settings.json par engine/fusionner-reglages.py, jamais copié tel quel. Les clés qui commencent par un tiret bas ne partent pas : _si_proxy ne se fusionne que si reglages/REPONSES porte PROXY=oui. Un crochet dont la commande vise ~/.claude/engine/ appartient au template : la fusion le remplace, les tiens restent.",
   "autoMemoryDirectory": "~/.claude/memory",
+  "env": {
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/demarrage-auto"
+  },
   "hooks": {
     "SessionStart": [
       {
@@ -11,11 +14,55 @@
             "statusMessage": "ClaudeOS : bilan de démarrage…"
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/engine/hooks/rappel-fichiers-nommage.sh\"",
+            "timeout": 10,
+            "statusMessage": "ClaudeOS : refus uniques réarmés après compaction…"
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
-        "matcher": "Write|Edit|NotebookEdit|Bash",
+        "matcher": "Write|Edit|NotebookEdit|Bash|Agent|SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/engine/hooks/rappel-fichiers-nommage.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/engine/hooks/rappel-decision.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Skill|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/engine/hooks/rappel-fichiers-nommage.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptExpansion": [
+      {
         "hooks": [
           {
             "type": "command",

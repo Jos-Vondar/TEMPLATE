@@ -9,9 +9,14 @@ l'utilisateur, sauf mention.
 ## Ce qui entre au menu
 
 - **Règles candidates** — voir ci-dessous.
-- **Les trois fils les plus vieux** de `etat.py fils --tous` : pour chacun, tenir, replanifier ou
-  abandonner. Rien ne compte les reconductions : un fil qui revient à la troisième passe, chercher
-  l'obstacle au lieu de le reconduire.
+- **Tous les fils dormants des domaines dont le créneau est ouvert le jour de la passe**, **dans les
+  seuls niveaux que `python3 ~/.claude/engine/lib_tri.py <niveau> …` dit « DANS le filet mensuel »** —
+  les autres ont eu un tri complet de `tri-des-fils` récemment ; un report n'en sort pas
+  (`etat.py fils --dormants` ; créneaux dans `reglages/CRENEAUX`, sans lequel tous les domaines sont
+  ouverts) : regroupés par projet, un avis par fil — tenir, fusionner, abandonner avec son motif —,
+  tranchés par lot, quatre projets par question. Un domaine hors créneau reçoit un `du` de tri sur
+  son niveau racine. Un fil dormant sort au tri — fait, abandonné, ou redaté une seule fois avec son
+  prochain geste ; sans réponse, il est abandonné, motif « dormance, rouvrable ».
 - **Rangement**, seulement si la détection n'est pas vide : fichier sans maison, reste de séance,
   fichier vide ou en double, nom non devinable. C'est le seul geste qui déplace : validé avant d'agir,
   **supprimé par `git -C <dépôt> rm`**, jamais rien dans un `_IGNORE/` sans classer et faire
@@ -41,7 +46,7 @@ fragments. Ce qui **reste** : le fait, sa conséquence, son statut, le renvoi. *
 retrait va dans l'événement, jamais dans le fichier qu'on allège.**
 
 La mesure des plafonds **se lance**, elle ne se refait pas de tête : `bash ~/.claude/engine/plafonds-parc.sh`
-— elle exclut les commentaires HTML, sans quoi trois verdicts du parc s'inversent.
+— elle exclut les commentaires HTML, sans quoi un en-tête fait verser du contenu utile.
 
 ## Règles candidates
 
@@ -57,7 +62,7 @@ compétence de l'utilisateur. Aux autres niveaux, le `CLAUDE.md` du niveau.
 Le troc se paie **DANS LA MONNAIE DE LA COUCHE CIBLE**, valeurs dans `engine/config.sh`,
 `CLAUDEOS_CLIQUET_*`. « Mes règles » → ses octets, qu'aucun cliquet ne borne : le `CLAUDE.md` est à toi,
 et seul ce troc le tient. Index `memory/MEMORY.md` → octets de l'index.
-`description` → octets des descriptions. Corps d'une fiche → **rien tant que CETTE fiche reste sous
-son plafond, et ce qui sort se prend DANS LA MÊME FICHE, jamais dans une autre**. *(Énoncé du
-refroidissement et du troc : le fragment `regles-a-froid-oui` du règlement ; ce geste-ci est la
-promotion.)*
+`description` → octets des descriptions. Corps d'une fiche → rien tant qu'elle reste sous son
+plafond. **Une candidate qui ne nomme ni ce qui paie ni pourquoi rien n'a à sortir meurt à la passe,
+avec son motif.** *(Énoncé du refroidissement et du troc : le fragment `regles-a-froid-oui` du
+règlement ; ce geste-ci est la promotion.)*

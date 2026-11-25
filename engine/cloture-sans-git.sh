@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-# cloture-sans-git.sh — la fin de la clôture quand `GIT=aucun` (`d-regime-sans-git`).
+# cloture-sans-git.sh — la fin de la clôture quand `GIT=aucun`.
 #
-# Écrit le 2026-10-01, plan complet de templating § 2, A3, geste 4. Code PROPRE AU TEMPLATE.
-# SOURCÉ par `claudeos-cloture.sh` à la place des commits, une fois faits les projections, l'index
-# de recherche et le contrôle des secrets : jamais lancé seul. Il emploie `SELF`, `SYS`, `HOOK_SRC`,
+# Code PROPRE AU TEMPLATE.
+# SOURCÉ par `claudeos-cloture.sh` à la place des commits, une fois faits les projections et le
+# contrôle des secrets : jamais lancé seul. Il emploie `SELF`, `SYS`, `HOOK_SRC`,
 # `ECARTES` et `_donnees_neuves` de l'appelant, et sort lui-même : 0, ou 5 comme une alarme sur le
 # système en régime GitHub.
 #

@@ -30,6 +30,7 @@
 # plugins/ : les greffons installés, qui se réinstallent.
 /plugins/
 /file-history/
+# .sync-backups/ : points de retour de la copie rsync d'une V1 ou d'une V2, sur un poste migré.
 /.sync-backups/
 /cache/
 # backups/ : sauvegardes de l'outil, et points de retour faits à la main avant une
@@ -79,7 +80,15 @@ settings.local.json
 # policy-limits.json.stamp.json : empreinte locale de la politique d'organisation, qui porte
 # un identifiant de poste.
 /policy-limits.json.stamp.json
+# *.signature*.json : signatures de `policy-limits.json` et de `remote-settings.json`, écrites par
+# l'outil. Elles suivent leur fichier parent, qui ne voyage pas.
+/policy-limits.json.signature*.json
 /remote-settings.json
+/remote-settings.json.signature*.json
+# remote-settings.json.synced-at : horodatage de synchro réécrit par l'outil à chaque démarrage.
+# Suivi, il laisserait le dépôt système modifié à chaque lancement, et chaque poste en conflit
+# avec l'autre sur ce seul fichier.
+/remote-settings.json.synced-at
 /statusline-settings.bak.json
 /history.jsonl
 
@@ -117,3 +126,7 @@ feedback/drafts/
 
 # Compétences synchronisées depuis claude.ai : elles se retéléchargent seules.
 skills/synced/
+
+# Enveloppe de l'hôte natif de Claude in Chrome, écrite par Claude Code : elle porte le chemin
+# absolu du binaire `claude`, propre au poste, et se régénère seule.
+/chrome/

@@ -178,8 +178,9 @@ se fait en vrai.
    - `bash ~/.claude/engine/claudeos-cloture.sh`. En GitHub, la clôture pousse : demande d'abord, en
      disant ce qui part, c'est-à-dire les dépôts privés de `claudeos_repos`. Sans git, elle contrôle et
      dit que rien n'est sorti. Lis ce qu'elle rend : une alarme qui mord arrête tout.
-2. **« Reprise »** : montre ce que fera sa prochaine session. Relis `~/.claude/ETAT.md` et rends l'état
-   du système en trois lignes, comme le démarrage le lui demandera chaque matin.
+2. **Le bilan** : montre ce que fera sa prochaine session. Rends le bilan que chaque session principale
+   ouvrira d'elle-même, selon `~/.claude/skills/demarrage/SKILL.md`, depuis la sortie de
+   `CLAUDEOS_BILAN_DEMANDE=1 bash ~/.claude/engine/boot-check.sh </dev/null`.
 3. **Les astuces** restent : le fragment les a posées dans `settings.json`. Chacune revient de
    plus en plus rarement, à son rythme ; les retirer, c'est ôter `spinnerTipsOverride` de
    `settings.json`.

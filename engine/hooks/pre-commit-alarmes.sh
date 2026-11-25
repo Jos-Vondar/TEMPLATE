@@ -1,44 +1,27 @@
 #!/usr/bin/env bash
 # =============================================================================
-# pre-commit-alarmes.sh — les alarmes au goulot unique du commit.
-# Écrit le 2026-08-22, étape 3.2 du plan de décomplexification. C'est R5 du
-# mandat libre, réalisé au bon endroit : les quatre motifs restent, une seule
-# implantation les porte, au lieu des trois d'aujourd'hui (backup.sh:281-311,
-# l'ancien script de poussée, l'ancien autotest). Les trois sont mortes depuis.
-#
-# EMPLACEMENT — le shim `.git/hooks/pre-commit` de chaque dépôt pointe sur CE fichier ;
-# `install-poste.sh` le pose, en testant le chemin complet, pas le seul nom. SANS GIT (`GIT=aucun`),
-# il n'y a ni dépôt ni shim : la clôture l'appelle elle-même, `--fichiers <liste>` (voir plus bas).
+# pre-commit-alarmes.sh — les alarmes au goulot unique du commit, pour tous les dépôts.
+# Appelé par le shim `.git/hooks/pre-commit` que pose `install-poste.sh` ; le shim vise ce
+# chemin complet (`CLAUDEOS_SHIM_TAIL`), pas le seul nom. SANS GIT (`GIT=aucun`), il n'y a ni
+# dépôt ni shim : la clôture l'appelle elle-même, `--fichiers <liste>` (voir plus bas).
 #
 # CODES RETOUR : 12 binaire · 13 nom de secret · 14 contenu de secret · 15 donnée ·
 #                16 syntaxe bash · 17 JSON invalide · 18 réceptacle _IGNORE en file ·
-#                20 cliquet de croissance · 25 liste noire d'un dépôt de travail absente ou divergente ·
+#                20 cliquet de croissance · 22 journal réécrit · 23 ETAT.md ≠ projection ·
+#                24 fichier gelé modifié · 25 liste noire d'un dépôt de travail absente ou divergente ·
 #                26 copie d'un relecteur de domaine divergente de sa source ·
 #                27 nom de régime mort dans un texte vivant · 28 chemin propre à un poste.
-# CODES RÉSERVÉS, PAS ENCORE ÉMIS : 19 plafond de taille, 21 forme des fichiers d'état.
-# Les deux contrôles existent et AVERTISSENT ; ils passeront en refus à la fin du palier 1
-# du plan de consolidation, quand les fichiers hors règle auront été versés. Le régime et
-# son motif sont écrits en tête du bloc des contrôles 8 à 10, plus bas dans ce fichier.
-# Les trois derniers sont arrivés le 2026-08-22 (étape 4.3), transplantés de l'autotest :
-# ils regardent CE QUI PART, donc leur place est ici. Ils n'ont PAS de levier — un script
-# cassé, un JSON illisible ou un réceptacle confidentiel suivi ne sont pas des arbitrages.
-# PIÈGE MESURÉ le 2026-08-22 : ces codes ne sont observables qu'en appelant CE
-# script directement. À travers `git commit`, git rend TOUJOURS 1 quand un hook
-# échoue — il écrase le code du hook. Le plan prescrivait « six codes retour
-# attendus » via un commit : c'est inobservable ainsi. Exercer le script, pas le
-# commit. Exercé le 2026-08-22 sur sept cas, tous conformes : 12, 13, 14, 15,
-# 0 (levier motivé), 0 (texte anodin), et 15 avec un levier VIDE — un levier sans
-# motif ne lève rien, c'est voulu. RÉEXERCÉ après le déménagement du 2026-08-22
-# sur huit cas : les sept ci-dessus, plus le refus 13 « alarme muette » obtenu en
-# rendant les deux config.sh introuvables. Les trois contrôles ajoutés le même jour
-# sont exercés sur six cas de plus : 16, 17, 18, et leurs trois négatifs.
+# CODES RÉSERVÉS, PAS ÉMIS : 19 plafond de taille (le contrôle 8 avertit), 21 libéré.
+# Les contrôles 16, 17 et 18 n'ont PAS de levier : un script cassé, un JSON illisible ou un
+# réceptacle confidentiel suivi ne sont pas des arbitrages.
+# PIÈGE : à travers `git commit`, git rend TOUJOURS 1 quand un hook échoue — il écrase le code.
+# Pour observer un code, exercer CE script directement, depuis la racine d'un dépôt jetable.
 # LEVIERS, granulaires et MOTIVÉS (une valeur vide ne lève rien) :
 #   FORCE_BINARY="motif"  FORCE_SECRET_NAME="motif"
 #   FORCE_SECRET="motif"  FORCE_DATA="motif"  FORCE_CLIQUET="motif"
 #   FORCE_JOURNAL="motif" FORCE_GELE="motif"  FORCE_NOMS_MORTS="motif"  FORCE_CHEMIN_POSTE="motif"
-# Chaque levée est tracée, datée, dans .git/ALARMES_FORCEES.log du dépôt visé.
-# LIMITE CONNUE : le plan voulait la trace DANS le message de commit ; cela
-# demanderait un second hook (prepare-commit-msg). Non fait, trace au journal.
+# Chaque levée est tracée, datée, dans .git/ALARMES_FORCEES.log du dépôt visé — pas dans le
+# message de commit, qui demanderait un second hook (prepare-commit-msg).
 # =============================================================================
 set -uo pipefail
 
@@ -75,10 +58,21 @@ _git_noms() {
     awk -F'\t' -v s="$1" '$1 != "" && index(s, $1) { print $2 }' "$_LISTE" \
         | if [ "${2:-}" = "-z" ]; then tr '\n' '\000'; else cat; fi
 }
-# `git diff --cached --numstat --diff-filter=A` — seule la colonne « - » des binaires compte.
-_git_numstat_ajouts() {
-    if [ -z "$_LISTE" ]; then git diff --cached --numstat --diff-filter=A; return; fi
-    _git_noms A | python3 "$_REGIME_PY" binaires "$GIT_ROOT" | awk '{ printf "-\t-\t%s\n", $0 }'
+# Les binaires parmi `_git_noms FILTRE` : la colonne « - » de `git diff --cached --numstat`.
+_git_binaires() {
+    if [ -z "$_LISTE" ]; then
+        git diff --cached --numstat --diff-filter="$1" | awk -F'\t' '$1=="-"&&$2=="-"{print $3}'
+        return
+    fi
+    _git_noms "$1" | python3 "$_REGIME_PY" binaires "$GIT_ROOT"
+}
+# `claudeos_somme RE HORS` (config.sh) — octets des fichiers suivis dont le chemin répond à RE et
+# pas à HORS, lus à l'index ; sans git, sur le disque, dans le périmètre de `regime.py suivis`.
+_git_somme() {
+    if [ -z "$_LISTE" ]; then claudeos_somme "$1" "$2"; return; fi
+    _git_suivis '*' | awk -v re="$1" -v ex="$2" '$0 ~ re && (ex == "" || $0 !~ ex)' \
+        | while IFS= read -r _sf; do [ -f "$_sf" ] && wc -c < "$_sf"; done \
+        | awk '{ s += $1 } END { print s + 0 }'
 }
 # `git diff --cached -U0 --diff-filter=ACM [-- CHEMIN]` — sans git, les seules lignes `+` : celles
 # que la dernière clôture ne portait pas. Un fichier NEUF est lu en bash, sans python : à la première
@@ -121,16 +115,10 @@ _git_suivis() {
     python3 "$_REGIME_PY" suivis "$GIT_ROOT" "$1"
 }
 
-# --- Motifs : SOURCE UNIQUE, pas de recopie ---------------------------------
-# config.sh les porte déjà (CLAUDEOS_SECRET_*). On le source plutôt que de les
-# dupliquer — le doublon est exactement ce que cet audit existe pour retirer.
-# Repli embarqué si config.sh disparaît (palier 4), et REFUS si aucun des deux :
-# une alarme qui ne sait pas quoi chercher se tait, et une alarme muette est pire
-# que pas d'alarme.
-# Le moteur vivant, résolu depuis l'emplacement du hook, jamais en dur : deux postes
-# aux dossiers personnels différents. Le repli sur l'archive est SUPPRIMÉ le 2026-08-22
-# avec `~/.claudeos` lui-même, sur les deux postes (palier 4.7). Il n'y a plus de
-# seconde source : si ce fichier manque, l'alarme refuse plus bas, elle ne se tait pas.
+# --- Motifs : SOURCE UNIQUE, `config.sh` (CLAUDEOS_SECRET_*), pas de recopie ---------------
+# Résolu depuis l'emplacement du hook, jamais en dur : les postes ont des dossiers personnels
+# différents. Pas de seconde source : sans motifs, REFUS — une alarme qui ne sait pas quoi
+# chercher se tait, et une alarme muette est pire que pas d'alarme.
 _CFG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/config.sh"
 if [ -r "$_CFG" ]; then
     # shellcheck disable=SC1090
@@ -145,24 +133,20 @@ if [ -z "$CLAUDEOS_SECRET_RE_FORMES" ] || [ -z "$CLAUDEOS_SECRET_RE_MOTS" ] || [
     exit 13
 fi
 
-# Extensions de donnée texte : un export, un journal ou une pièce jointe y partirait sans un mot.
-# SOURCE UNIQUE : `config.sh` porte le motif depuis le 2026-08-24, parce que `claudeos-cloture.sh`
-# le lit aussi. Le repli embarqué ne sert qu'à un poste dont le `config.sh` est en retard —
-# il PRÉVIENT au lieu de se taire, sinon un motif divergent passerait inaperçu.
-if [ -n "${CLAUDEOS_DATA_RE:-}" ]; then
-    _DATA_RE="$CLAUDEOS_DATA_RE"
+# Extensions de donnée texte — un export, un journal ou une pièce jointe y partirait sans un mot —,
+# et leurs exemptions. SOURCE UNIQUE : `config.sh`, lu aussi par `claudeos-cloture.sh`. Le repli
+# embarqué ne sert qu'à un poste dont le `config.sh` est en retard — il PRÉVIENT au lieu de se
+# taire, et n'exempte rien : `^$` ne retire aucun nom de fichier, alors qu'un motif vide les
+# retirerait tous.
+if [ -n "${CLAUDEOS_DATA_RE:-}" ] && [ -n "${CLAUDEOS_DATA_EXEMPT_RE:-}" ]; then
+    _DATA_RE="$CLAUDEOS_DATA_RE"; _DATA_EXEMPT_RE="$CLAUDEOS_DATA_EXEMPT_RE"
 else
-    _DATA_RE='\.(csv|tsv|txt|json|jsonl|xml|eml|msg)$'
-    echo "[alarmes] ⚠ CLAUDEOS_DATA_RE absent de config.sh — repli embarqué employé. Ce poste est en retard : tire avant de committer." >&2
+    _DATA_RE='\.(csv|tsv|txt|json|jsonl|xml|eml|msg)$'; _DATA_EXEMPT_RE='^$'
+    echo "[alarmes] ⚠ CLAUDEOS_DATA_RE ou CLAUDEOS_DATA_EXEMPT_RE absent de config.sh — repli embarqué employé. Ce poste est en retard : tire avant de committer." >&2
 fi
-# PAS DE WHITELIST ICI — retirée le 2026-08-22 sur objection de l'utilisateur, qui
-# a raison. `backup.sh:258` en portait une (un dossier de projet personnel, décidée le
-# 2026-07-27) et je l'avais recopiée sans la questionner. Deux défauts : c'est un
-# motif de plus à maintenir, et surtout elle est MUETTE — un binaire y passait sans
-# laisser de trace. Le levier `FORCE_BINARY="motif"` fait le même travail, à la même
-# fréquence (une couverture par saison), et il écrit une ligne datée dans
-# .git/ALARMES_FORCEES.log. Le régime du dépôt est la liste noire : ce qui ne doit
-# pas être suivi se dit dans .gitignore, pas dans une exception d'alarme.
+# PAS DE LISTE BLANCHE : elle serait MUETTE — un binaire y passerait sans trace. Le levier
+# `FORCE_BINARY="motif"` fait le même travail et laisse une ligne datée. Ce qui ne doit pas être
+# suivi se dit dans .gitignore, pas dans une exception d'alarme.
 
 # Sans git, le journal des levées vit sous `.claudeos/`, à côté des empreintes : il n'y a pas de `.git/`.
 if [ -n "$_LISTE" ]; then _TRACE="$GIT_ROOT/.claudeos/ALARMES_FORCEES.log"; mkdir -p "$GIT_ROOT/.claudeos"
@@ -173,9 +157,8 @@ _leve()  { [ -n "${2:-}" ] && { echo "[alarmes] ⚠ $1 LEVÉE — motif : $2" >&
 FAIL=0
 
 # --- 1. Binaire ajouté (code 12) --------------------------------------------
-# L'alarme secret ne lit que le texte : elle est AVEUGLE au binaire. Un .pdf ou un .docx de
-# client passerait par ce trou.
-NEW_BIN="$(_git_numstat_ajouts | awk -F'\t' '$1=="-"&&$2=="-"{print $3}' || true)"
+# L'alarme secret ne lit que le texte : elle est AVEUGLE au binaire (.pdf, .docx client).
+NEW_BIN="$(_git_binaires A || true)"
 if [ -n "$NEW_BIN" ]; then
     if ! _leve "BINAIRE" "${FORCE_BINARY:-}"; then
         echo "[alarmes] ⛔ ALARME BINAIRE — nouveau(x) binaire(s) en file, contenu non scannable :" >&2
@@ -186,18 +169,11 @@ if [ -n "$NEW_BIN" ]; then
 fi
 
 # --- 2. Nom de fichier suspect (code 13) ------------------------------------
-# EXCEPTION `secrets-shared/` — posée le 2026-09-01 sur arbitrage de l'utilisateur.
-# DÉFAUT CORRIGÉ, mesuré et non déduit : le motif cherche « secret » dans le CHEMIN
-# ENTIER, et le dossier `secrets-shared/` porte ce mot dans son propre nom. L'alarme
-# mordait donc sur TOUT ce qu'on y rangeait — `secrets-shared/note_anodine.md` a été
-# refusé au banc d'essai — pendant que son message d'aide, six lignes plus bas,
-# prescrivait précisément d'y ranger. Le conseil était insuivable : constaté le
-# 2026-08-31 sur une vraie clé à ranger, reproduit sur copie du garde le 2026-09-01.
-# CE N'EST PAS LA LISTE BLANCHE RETIRÉE LE 2026-08-22 (voir le bloc plus haut). Celle-là
-# était MUETTE — c'était l'objection, et elle tenait. Celle-ci TRACE : une ligne à l'écran
-# et une ligne datée dans .git/ALARMES_FORCEES.log, par fichier. Elle ne lève QUE le nom :
-# l'alarme de CONTENU (code 14) reste armée entière sur ce dossier, et c'est elle qui garde
-# la valeur d'un secret. Le régime du dépôt n'est pas changé, un angle mort est fermé.
+# EXCEPTION `secrets-shared/` : le motif cherche « secret » dans le CHEMIN ENTIER, et ce dossier
+# porte le mot dans son nom — l'alarme refusait tout ce qu'on y range, alors que son message
+# d'aide prescrit d'y ranger. Ce n'est pas une liste blanche muette : elle TRACE, à l'écran et
+# dans le journal des levées, par fichier. Elle ne lève QUE le nom : l'alarme de CONTENU
+# (code 14) reste armée sur ce dossier, et c'est elle qui garde la valeur d'un secret.
 ALL_NAME="$(_git_noms A | grep -Ei -- "$CLAUDEOS_SECRET_NAME_RE" || true)"
 DEPOT_NAME="$(printf '%s' "$ALL_NAME" | grep -E '(^|/)secrets-shared/' || true)"
 BAD_NAME="$(printf '%s' "$ALL_NAME" | grep -Ev '(^|/)secrets-shared/' || true)"
@@ -220,10 +196,10 @@ fi
 # --- 3. Contenu de secret (code 14) -----------------------------------------
 DIFF="$(_git_diff_ajouts 2>/dev/null | grep '^+' | grep -v '^+++' || true)"
 HIT=""
-# Les FORMES se comparent à la casse exacte, les MOTS sans elle : `config.sh` l'exige, et une forme
-# comparée sans la casse fait sonner un bloc base64 (audit de la v3.0.0, une clôture refusée).
-[ -n "$DIFF" ] && HIT="$( { printf '%s' "$DIFF" | grep -E -- "$CLAUDEOS_SECRET_RE_FORMES"
-                            printf '%s' "$DIFF" | grep -Ei -- "$CLAUDEOS_SECRET_RE_MOTS"; } | head -3 || true)"
+# LA CASSE COMPTE POUR LES FORMES, PAS POUR LES MOTS : deux lectures séparées, comme dans
+# `controle-secrets.sh`. Un seul `grep -Ei` sur les deux motifs ramène le faux positif base64
+# que `config.sh` documente.
+[ -n "$DIFF" ] && HIT="$( { printf '%s\n' "$DIFF" | grep -E -- "$CLAUDEOS_SECRET_RE_FORMES"; printf '%s\n' "$DIFF" | grep -Ei -- "$CLAUDEOS_SECRET_RE_MOTS"; } | head -3 || true)"
 if [ -n "$HIT" ] && [ "$FAIL" -eq 0 ]; then
     if ! _leve "SECRET-CONTENU" "${FORCE_SECRET:-}"; then
         echo "[alarmes] ⛔ ALARME SECRET — une valeur de secret apparaît dans la file." >&2
@@ -237,45 +213,17 @@ if [ -n "$HIT" ] && [ "$FAIL" -eq 0 ]; then
 fi
 
 # --- 4. Donnée client (code 15) ---------------------------------------------
-# EXEMPTION DU JOURNAL D'ÉVÉNEMENTS, sur arbitrage de l'utilisateur du 2026-09-08.
-# Le motif : `CLAUDEOS_DATA_RE` nomme `.jsonl`, et le journal EST un `.jsonl` dont un exemplaire
-# NEUF naît chaque mois — donc, sans cette exemption, une levée `FORCE_DATA` par mois, douze par
-# an, sur la même alarme. Forcer une alarme à date fixe apprend à ignorer sa catégorie entière,
-# et ce dépôt l'a déjà payé trois fois.
-# ELLE EST ANCRÉE SUR LE CHEMIN, pas sur l'extension : `journal/AAAA-MM.jsonl` et rien d'autre.
-# Un `.jsonl` posé ailleurs — ou nommé autrement dans `journal/` — reste refusé.
-# CE QUI GARDE LE FICHIER MALGRÉ L'EXEMPTION, et c'est pour ça qu'elle est acceptable : les
-# contrôles 13 et 14 (nom de secret, contenu de secret) le balaient toujours, et la règle
-# d'anonymat du journal est celle de la compétence `reprise`.
-_JOURNAL_RE='(^|/)journal/[0-9]{4}-[0-9]{2}\.jsonl$'
-# EXEMPTION DE LA CONFIGURATION DU HARNAIS, sur arbitrage de l'utilisateur du 2026-09-09, écrite le
-# 2026-09-10. Même forme et même motif que l'exemption du journal ci-dessus : `CLAUDEOS_DATA_RE`
-# nomme `.json`, et `settings.json` EST un `.json` — mais c'est la configuration du harnais, pas une
-# donnée client. Sans l'exemption, toute création de ce fichier dans un dépôt neuf lève `FORCE_DATA`
-# sur une alarme qui ne dit rien, et une alarme forcée par routine apprend à ignorer sa catégorie.
-# ELLE EST ANCRÉE SUR LE CHEMIN, pas sur l'extension, ET SUR LES DEUX FORMES QUE `git` REND
-# RÉELLEMENT — c'est le piège de ce motif, mesuré avant de l'écrire :
-#   · `settings.json` À LA RACINE, parce que le dépôt `~/.claude` A POUR RACINE `.claude` ;
-#   · `.claude/settings.json` À TOUTE PROFONDEUR, la forme des quatre dépôts clients.
-# Un motif qui ne dirait que `.claude/settings.json` — la lettre du du `u-controle-15-config-chemin`
-# — RATERAIT LE DÉPÔT `~/.claude`, celui où l'écart a été trouvé. Et l'ancrage racine reste étroit :
-# un `settings.json` posé en sous-dossier quelconque (`docs/`, `app/`) reste refusé.
-# PÉRIMÈTRE VOLONTAIREMENT ÉTROIT : `settings.local.json` N'EST PAS exempté (2026-09-09). Son motif
-# d'origine — « hors dépôt par nature » — est faux : un dépôt peut en suivre un. Le périmètre tient
-# quand même, pour l'autre raison : ce fichier porte les permissions locales d'un poste et n'a rien
-# à faire en zone partagée, donc l'alarme qui se lève dessus DIT quelque chose.
-# CE QUI GARDE LE FICHIER MALGRÉ L'EXEMPTION, et c'est pour ça qu'elle est acceptable : les
-# contrôles 13 et 14 (nom de secret, contenu de secret) le balaient toujours, et le contrôle 17
-# refuse un JSON invalide.
-_CONFIG_RE='(^settings\.json$|(^|/)\.claude/settings\.json$)'
-# EXEMPTION DE LA CONFIGURATION DU TEMPLATE : trois `.json` livrés — le fragment de réglages, les
-# réglages de la session d'installation, les astuces du spinner —, sans aucune donnée. ANCRÉE sur
-# `gabarits/` et `installateur/` à la racine de `~/.claude`, à un seul niveau, et DANS CE DÉPÔT
-# SEUL : le crochet tourne aussi dans les dépôts de travail, où un `gabarits/x.json` est une donnée
-# comme une autre. Un `.json` posé ailleurs reste refusé. Les contrôles 13 et 14 les balaient toujours.
-_TEMPLATE_RE='^(gabarits|installateur)/[^/]+\.json$'
-NEW_DATA="$(_git_noms A | grep -Ei -- "$_DATA_RE" | grep -v '/extracted/' | grep -vE -- "$_JOURNAL_RE" | grep -vE -- "$_CONFIG_RE" || true)"
-if [ "$GIT_ROOT" -ef "$HOME/.claude" ]; then
+# EXEMPTIONS, justifiées motif par motif : `CLAUDEOS_DATA_EXEMPT_RE` (config.sh), la même source
+# que la clôture. Les contrôles 13 et 14 (nom et contenu de secret) balaient toujours les exemptés.
+# S'Y AJOUTE LA CONFIGURATION DU TEMPLATE, DANS `~/.claude` SEUL : trois `.json` livrés — le
+# fragment de réglages, les réglages de la session d'installation, les astuces du spinner —, sans
+# aucune donnée, à un seul niveau sous `gabarits/` et `installateur/`, et les déclarations du mod
+# sous `mods/`. Elle vit dans `config.sh` (`CLAUDEOS_DATA_EXEMPT_SYSTEME_RE`), lue aussi par la
+# clôture, et ne s'applique que dans `~/.claude` : dans un dépôt de travail, un `gabarits/x.json`
+# est une donnée comme une autre.
+_TEMPLATE_RE="${CLAUDEOS_DATA_EXEMPT_SYSTEME_RE:-}"
+NEW_DATA="$(_git_noms A | grep -Ei -- "$_DATA_RE" | grep -vE -- "$_DATA_EXEMPT_RE" || true)"
+if [ -n "$_TEMPLATE_RE" ] && [ "$GIT_ROOT" -ef "$HOME/.claude" ]; then
     NEW_DATA="$(printf '%s\n' "$NEW_DATA" | grep -vE -- "$_TEMPLATE_RE" || true)"
 fi
 if [ -n "$NEW_DATA" ] && [ "$FAIL" -eq 0 ]; then
@@ -289,11 +237,8 @@ if [ -n "$NEW_DATA" ] && [ "$FAIL" -eq 0 ]; then
 fi
 
 # --- 5. Syntaxe des scripts en file (code 16) --------------------------------
-# Transplanté du contrôle 1 de l'autotest le 2026-08-22 (étape 4.3). L'autotest le passait sur
-# TOUS les scripts avant chaque sauvegarde ; ici on ne regarde que ceux qui sont en file, ce qui
-# le rend quasi gratuit et le déclenche au bon moment — un script cassé committé est un script
-# cassé qui part sur l'autre poste. BLOQUE : un moteur qui ne s'analyse pas est une plomberie
-# corrompue, pas un défaut de contenu.
+# Seuls les scripts en file : quasi gratuit, et au bon moment — un script cassé committé part
+# cassé sur l'autre poste. BLOQUE : un moteur qui ne s'analyse pas est une plomberie corrompue.
 BAD_SH=""
 while IFS= read -r _f; do
     [ -n "$_f" ] || continue
@@ -308,8 +253,8 @@ if [ -n "$BAD_SH" ] && [ "$FAIL" -eq 0 ]; then
 fi
 
 # --- 6. JSON en file (code 17) -----------------------------------------------
-# Transplanté du contrôle 4. Un `settings.json` invalide désarme les hooks EN SILENCE —
-# l'outil le charge, échoue, et continue sans. BLOQUE, pour la même raison.
+# Un `settings.json` invalide désarme les hooks EN SILENCE — l'outil le charge, échoue, et
+# continue sans. BLOQUE, pour la même raison.
 BAD_JSON=""
 while IFS= read -r _f; do
     [ -n "$_f" ] || continue
@@ -339,25 +284,12 @@ fi
 
 
 # =============================================================================
-# CONTRÔLES 8, 9 et 10 — posés le 2026-09-07.
-#
-# RÉGIME, arbitré par l'utilisateur le 2026-09-07 CONTRE la lettre du plan, qui les
-# voulait tous les trois bloquants. La fiche `controles-et-alarmes` § « Ce qui bloque
-# et ce qui avertit » dit qu'un plafond de RANGEMENT avertit, parce que bloquer dessus
-# a déjà fait perdre deux journées de travail à ce système. Mesuré le 2026-09-07 avant
-# d'écrire : 6 fichiers de reprise sur 22 et 8 MEMORY.md sur 30 dépassaient déjà, et 11 fichiers
-# de reprise sur 22 étaient hors forme — un régime bloquant refusait donc 14 fichiers dès la première
-# minute, la clôture du jour comprise.
-#   · 8  PLAFOND  → AVERTIT. Passe en refus (code 19) à la fin du palier 1, quand les
-#                   fichiers seront versés. Le code est réservé, pas encore émis.
-#   · 9  CLIQUET  → BLOQUE (code 20), levier `FORCE_CLIQUET="motif"`. Il ne mesure pas
-#                   le rangement mais la CROISSANCE, rien ne le dépasse aujourd'hui,
-#                   donc son coût du premier jour est nul. C'est le vrai invariant.
-#   · 10 FORME    → AVERTIT. Même sort que le 8.
-#
-# UNITÉ : caractères. `LC_ALL` est forcé pour que le compte ne dépende pas de
-# l'environnement dans lequel git lance le hook — mesuré le 2026-09-07 : `wc -m` rend
-# 43 784 pour 45 475 octets sur un fichier d'état de l'époque, l'écart étant les accents.
+# CONTRÔLES 8 et 9 — régime, partage « bloque / avertit » de `controles-et-alarmes` :
+#   · 8 PLAFOND → AVERTIT : un plafond de RANGEMENT ; bloquer dessus fait perdre une journée
+#                 de travail pour un défaut qui encombre. Code 19 réservé, pas émis.
+#   · 9 CLIQUET → BLOQUE (code 20), levier `FORCE_CLIQUET="motif"` : il mesure la CROISSANCE,
+#                 c'est le vrai invariant.
+# UNITÉ du plafond : le CARACTÈRE, pas l'octet (les accents font l'écart).
 # =============================================================================
 
 # Contenu de la version EN FILE, avec repli sur le disque quand le fichier n'est pas
@@ -369,13 +301,12 @@ _contenu() {
     return 1
 }
 
-# Le calcul du plafond vit dans `config.sh` (`claudeos_plafond_de`), lu par ce crochet ET par le
-# contrôle 29 de `weekly-check.sh`. Repli si la fonction manque : le contrôle le DIT et se tait,
-# il ne devine pas un plafond — une borne inventée est pire qu'une borne absente.
-# CLÉ QUALIFIÉE PAR DÉPÔT depuis le 2026-09-08 (geste 1.15) : `git diff --cached` rend un chemin
-# relatif à la racine du dépôt, et cinq dépôts portent un `MEMORY.md` à leur racine depuis la
-# bascule. Sans le préfixe, la mémoire de `<DÉPÔT_B>` héritait de la borne de `~/.claude`.
-# Le préfixe est le NOM DU DOSSIER, pas le chemin absolu : les deux postes diffèrent, le nom non.
+# Le calcul du plafond vit dans `config.sh` (`claudeos_plafond_de`), lu aussi par
+# `plafonds-parc.sh`. Si la fonction manque, le contrôle le DIT et se tait : une borne
+# inventée est pire qu'une borne absente.
+# CLÉ QUALIFIÉE PAR DÉPÔT : `git diff --cached` rend un chemin relatif à la racine, et plusieurs
+# dépôts portent un fichier d'état de même nom à leur racine — sans préfixe, une seule borne. Le
+# préfixe est le NOM DU DOSSIER, pas le chemin absolu, qui diffère d'un poste à l'autre.
 if ! declare -F claudeos_plafond_de >/dev/null 2>&1; then
     echo "[alarmes] ⚠ PLAFOND — claudeos_plafond_de absente de config.sh : contrôle 8 NON JOUÉ (ce poste est en retard, tire avant de committer)." >&2
     _plafond_de() { return 1; }
@@ -391,10 +322,9 @@ if [ -n "$ETATS" ]; then
     while IFS= read -r _f; do
         [ -n "$_f" ] || continue
         _p="$(_plafond_de "$_f")" || continue
-        # Compté DIRECTEMENT depuis la source : passer par une variable perd le saut de
-        # ligne final, donc sous-comptait d'un caractère de façon systématique (mesuré).
-        # Compté par python3 depuis le 2026-09-22 : même valeur que `wc -m`, sans dépendre
-        # de la locale ni de quel `wc` le PATH résout dans un hook. Voir plafonds-parc.sh.
+        # Compté DIRECTEMENT depuis la source : passer par une variable perd le saut de ligne
+        # final. Par python3 : même valeur que `wc -m`, sans dépendre de la locale ni du `wc`
+        # que le PATH résout dans un hook.
         _n="$(_contenu "$_f" | python3 -c "import sys;print(len(sys.stdin.buffer.read().decode('utf-8','surrogateescape')))")" || { echo "[alarmes] ⚠ PLAFOND — $_f illisible en file ET sur le disque : NON MESURÉ, pas « conforme »." >&2; continue; }
         [ "$_n" -gt "$_p" ] && _GROS="$_GROS      $_n car (plafond $_p) — $_f"$'\n'
     done <<< "$ETATS"
@@ -407,49 +337,44 @@ if [ -n "$ETATS" ]; then
 fi
 
 # --- 9. Cliquet de croissance (code 20) — BLOQUE ------------------------------
-# Dépôt SYSTÈME seulement : les trois valeurs mesurent des objets qui n'existent que là.
-# La racine du système est résolue depuis l'emplacement de CE fichier, jamais en dur —
-# deux postes aux dossiers personnels différents.
-# `pwd -P` ET NON `pwd` : `~/.claude` peut être un LIEN vers un autre dossier.
-# `git rev-parse --show-toplevel` rend le chemin PHYSIQUE, `pwd` sans -P rend le chemin LOGIQUE :
-# les deux ne pouvaient plus etre egaux, et CE BLOC NE S EXECUTAIT PLUS DU TOUT — le cliquet de
-# croissance etait muet depuis quatre jours, sans un mot. Mesure et correction le 2026-09-16.
-# Les deux cotes sont resolus, pour rester juste sur un poste sans lien comme avec.
+# Dépôt SYSTÈME seulement : les valeurs mesurent des objets qui n'existent que là. Sa racine
+# est résolue depuis l'emplacement de CE fichier, jamais en dur.
+# `pwd -P` DES DEUX CÔTÉS, PAS `pwd` : `~/.claude` peut être un LIEN, et `git rev-parse
+# --show-toplevel` rend le chemin PHYSIQUE. Avec `pwd` les deux ne sont jamais égaux et le
+# cliquet ne s'exécute plus, sans un mot.
 _SYS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd -P)"
 _GIT_ROOT_P="$(cd "$GIT_ROOT" 2>/dev/null && pwd -P)"
 if [ -n "$_SYS_ROOT" ] && [ "$_GIT_ROOT_P" = "$_SYS_ROOT" ] && [ "$FAIL" -eq 0 ]; then
-    # Les trois valeurs viennent de `config.sh`, SOURCE UNIQUE, et de nulle part ailleurs.
-    # Elles etaient recopiees ici en repli — 384909 et 27, contre 378244 et 21 au 2026-09-08 :
-    # config.sh non source, le crochet laissait passer 6 665 octets de derive EN SILENCE.
-    # Un repli chiffre redevient faux au premier changement, donc on REFUSE plutot que de le
-    # recopier — meme forme que le refus des motifs de secrets plus haut. (Corrige le 2026-09-16.)
-    for _v in CLAUDEOS_CLIQUET_REGLEMENT CLAUDEOS_CLIQUET_INDEX CLAUDEOS_CLIQUET_DESCRIPTIONS CLAUDEOS_CLIQUET_FICHE CLAUDEOS_CLIQUET_CONTROLES; do
-        if [ -z "${!_v}" ]; then
+    # Les valeurs viennent de `config.sh`, SOURCE UNIQUE. Pas de repli chiffré : il redevient faux
+    # au premier changement et laisse passer la dérive en silence. Sans elles, on REFUSE.
+    # `${!_v:-}` et non `${!_v}` : sous `set -u`, une variable absente arrêterait le crochet sur
+    # « unbound variable », sans ce message.
+    for _v in CLAUDEOS_CLIQUET_REGLEMENT CLAUDEOS_CLIQUET_INDEX CLAUDEOS_CLIQUET_DESCRIPTIONS CLAUDEOS_CLIQUET_FICHE CLAUDEOS_CLIQUET_MOTEUR CLAUDEOS_CLIQUET_FICHES_SYSTEME CLAUDEOS_MOTEUR_RE CLAUDEOS_FICHES_SYSTEME_RE; do
+        if [ -z "${!_v:-}" ]; then
             echo "[alarmes] ⛔ REFUS : $_v absent — config.sh non sourcé ou muet." >&2
             echo "[alarmes]    Le cliquet ne peut pas être mesuré ; il ne se devine pas." >&2
             FAIL=1
         fi
     done
+fi
+# Une valeur absente : le refus est dit, rien ne se mesure — comparer à une borne absente
+# arrêterait le crochet sous `set -u`.
+if [ -n "$_SYS_ROOT" ] && [ "$_GIT_ROOT_P" = "$_SYS_ROOT" ] && [ "$FAIL" -eq 0 ]; then
     _CLIQ=""
-    # a) Règlement racine — MESURE RETIRÉE DE LA COPIE le 2026-10-01 (A6, `u-cliquet-reglement-installateur`).
-    #    Le `CLAUDE.md` est celui de l'installateur : son persona, ses domaines, ses règles. Le texte
-    #    qui lui est propre n'a aucun cliquet du template (plan complet § 1.3) — Claude Code avertit
-    #    lui-même au-delà de sa limite combinée —, et une borne posée sur un fichier neuf aurait figé
-    #    « Mes règles » dès sa première ligne. `CLAUDEOS_CLIQUET_REGLEMENT` borne désormais les
-    #    seuls fragments du jeu MAX, que l'atelier mesure (`mesure-personnalisation.py taille`).
+    # a) Règlement racine — PAS MESURÉ ICI. Le `CLAUDE.md` est celui de l'installateur : son
+    #    persona, ses domaines, ses règles. Le texte qui lui est propre n'a aucun cliquet du
+    #    template — Claude Code avertit lui-même au-delà de sa limite combinée —, et une borne posée
+    #    sur un fichier neuf aurait figé « Mes règles » dès sa première ligne.
+    #    `CLAUDEOS_CLIQUET_REGLEMENT` borne les seuls fragments du jeu MAX, que l'atelier mesure
+    #    (`mesure-personnalisation.py taille`).
     # a2) Index de la mémoire automatique, en octets — injecté à chaque session comme le règlement.
-    #     Ajouté le 2026-09-22 sur arbitrage de l'utilisateur : il pesait plus que le règlement
-    #     et n'avait ni cliquet ni monnaie de troc. Même mesure que (a).
     if _i="$(_contenu memory/MEMORY.md)"; then
         _in="$(printf '%s' "$_i" | wc -c | tr -d ' ')"
         [ "$_in" -gt "$CLAUDEOS_CLIQUET_INDEX" ] \
             && _CLIQ="$_CLIQ      index memory/MEMORY.md : $_in octets > ${CLAUDEOS_CLIQUET_INDEX} (cliquet)"$'\n'
     fi
-    # b) Compétences — DEUX mesures, et la somme des corps n'en est plus une. Motif complet en
-    #    tête du bloc des cliquets de `config.sh` : un corps ne coûte rien tant que sa fiche ne se
-    #    charge pas, et une somme globale laisse financer une fiche par le dégraissage d'une autre.
-    #    b1) somme des `description:` — LA SEULE PART PAYÉE À CHAQUE SESSION.
-    #    b2) la plus grosse fiche — la dérive du corps se borne par fiche, jamais en somme.
+    # b) Compétences : b1) somme des `description:`, payée à chaque session ; b2) la plus grosse
+    #    fiche. La somme des fiches système est mesurée en c).
     #    La description est lue dans le frontmatter, première ligne `description:` avant le `---`
     #    de fermeture. Une fiche sans frontmatter compte 0 et n'est PAS une erreur : elle ne se
     #    route pas, et le contrôle 40 du weekly-check est celui qui le dit.
@@ -471,15 +396,31 @@ if [ -n "$_SYS_ROOT" ] && [ "$_GIT_ROOT_P" = "$_SYS_ROOT" ] && [ "$FAIL" -eq 0 ]
     else
         echo "[alarmes] ⚠ CLIQUET — aucune fiche skills/*/SKILL.md en file : NON MESURÉ, pas « conforme »." >&2
     fi
-    # c) Nombre de contrôles émis par le contrôle hebdomadaire.
-    if _w="$(_contenu engine/weekly-check.sh)"; then
-        _wn="$(printf '%s' "$_w" | grep -cE '^echo "\[selftest\] [0-9]')"
-        [ "$_wn" -gt "$CLAUDEOS_CLIQUET_CONTROLES" ] \
-            && _CLIQ="$_CLIQ      contrôles hebdomadaires : $_wn > ${CLAUDEOS_CLIQUET_CONTROLES} (cliquet)"$'\n'
+    # c) Budgets en somme : le code du moteur et les fiches système, en octets, à l'index (sans
+    #    git, sur le disque). Une fiche système peut en financer une autre ; les compétences
+    #    ajoutées par l'installateur sont hors budget. ICI UN AVERTISSEMENT, JAMAIS UN REFUS : ces
+    #    fichiers appartiennent au template, que l'installateur ne développe pas. Ce qui les fait
+    #    dépasser chez lui, c'est une version qu'il a choisi de GARDER à une mise à jour, ou un
+    #    correctif local : le refuser punirait un choix que la mise à jour lui offre.
+    _mo="$(_git_somme "$CLAUDEOS_MOTEUR_RE" "${CLAUDEOS_MOTEUR_HORS_RE:-}")"
+    _fs="$(_git_somme "$CLAUDEOS_FICHES_SYSTEME_RE" "")"
+    if [ "${_mo:-0}" -eq 0 ] || [ "${_fs:-0}" -eq 0 ]; then
+        echo "[alarmes] ⚠ CLIQUET — budget moteur ou fiches système NON MESURÉ (somme nulle), pas « conforme »." >&2
+    else
+        _BUDG=""
+        [ "$_mo" -gt "$CLAUDEOS_CLIQUET_MOTEUR" ] \
+            && _BUDG="$_BUDG      moteur : $_mo octets > ${CLAUDEOS_CLIQUET_MOTEUR}"$'\n'
+        [ "$_fs" -gt "$CLAUDEOS_CLIQUET_FICHES_SYSTEME" ] \
+            && _BUDG="$_BUDG      fiches système : $_fs octets > ${CLAUDEOS_CLIQUET_FICHES_SYSTEME}"$'\n'
+        if [ -n "$_BUDG" ]; then
+            echo "[alarmes] ⚠ BUDGET — les fichiers du template pèsent plus que leur version livrée :" >&2
+            printf '%s' "$_BUDG" >&2
+            echo "[alarmes]   Une version gardée à la mise à jour, ou un correctif local, en est la cause ordinaire : rien n'est refusé." >&2
+        fi
     fi
     if [ -n "$_CLIQ" ]; then
         if ! _leve "CLIQUET" "${FORCE_CLIQUET:-}"; then
-            echo "[alarmes] ⛔ CLIQUET — la couche payée à chaque session GROSSIT :" >&2
+            echo "[alarmes] ⛔ CLIQUET — le système GROSSIT :" >&2
             printf '%s' "$_CLIQ" >&2
             echo "[alarmes] On ne remonte jamais : pour ajouter, retire. Nomme ce qui sort." >&2
             echo "[alarmes] Sinon assume : FORCE_CLIQUET=\"motif\" git commit … (tracé)" >&2
@@ -488,10 +429,6 @@ if [ -n "$_SYS_ROOT" ] && [ "$_GIT_ROOT_P" = "$_SYS_ROOT" ] && [ "$FAIL" -eq 0 ]
         fi
     fi
 fi
-
-# --- 10. Forme des fichiers d'état — RETIRÉ le 2026-09-22 -----------------------
-# Code 21 libéré. Il gardait la forme des fichiers d'état d'avant le journal à événements, et plus
-# aucun niveau vivant n'en porte depuis le 2026-09-22.
 
 # --- 11. Liste noire d'un dépôt de travail professionnel — REFUSE (code 25)
 # CE QU'IL FERME : la liste noire vit DANS chaque dépôt de travail, où elle arrive avec le clone —
@@ -587,7 +524,6 @@ elif [ "$_GIT_REGIME" = "unique" ] && [ "$GIT_ROOT" -ef "$HOME/.claude" ]; then
 fi
 
 # --- 12. Copies des relecteurs de domaine — REFUSE (code 26)
-# Écrit le 2026-09-08, geste 1.6 de la bascule, sur arbitrage de l'utilisateur.
 # CE QU'IL FERME : Claude Code n'explore que `~/.claude/agents/` et le `.claude/agents/` du projet
 # ouvert — jamais un sous-dossier de `domaines/`. Les trois relecteurs de domaine sont donc RECOPIÉS
 # dans le `.claude/agents/` de chaque dépôt qui relève de ce domaine. Ce contrôle est le prix de
@@ -620,20 +556,12 @@ if [ -d "$GIT_ROOT/.claude/agents" ]; then
 fi
 
 # --- 13. Journal d'événements et projection — REFUSE (codes 22 et 23)
-# Écrit le 2026-09-08, geste 2.3. INERTE tant qu'aucun niveau ne porte de `journal/` ni
-# d'`ETAT.md` : il ne s'éveille que si le commit en touche un. C'est voulu — le filet est posé
-# AVANT la bascule du 2.4, pour qu'il n'y ait pas une fenêtre où l'on écrit sans garde.
-# CE QU'IL FERME : un journal s'AJOUTE. Une ligne passée modifiée, ou deux lignes portant le même
-# `id`, sont la signature d'une fusion en `union` — et git annonce cette fusion comme un SUCCÈS
-# (mesuré le 2026-09-08 sur deux clones). Le dégât est donc muet sans ce contrôle.
-# LEVIER SUR LE 22, et c'est un ÉCART qui tranche une contradiction du plan. Son § 2.3 (a) dit
-# « refuse, aucun levier » ; son § 2.3 (c) prescrit un message d'après-`pull` où « le crochet la
-# refuse — levier documenté dans le message ». Les deux ne tiennent pas ensemble : le RETRAIT du
-# doublon qu'une fusion en `union` a fabriqué est la SEULE réécriture licite d'un journal, et sans
-# levier elle serait impossible — le dépôt resterait en défaut pour toujours. La consigne nommée
-# bat le garde général : `FORCE_JOURNAL="motif"`, tracé, et le message dit son unique usage.
-# PAS de levier sur le 23, et pour une autre raison : la projection se REFAIT en une commande,
-# donc il n'y a rien à assumer, seulement un geste à jouer.
+# Ne s'éveille que si le commit touche un `journal/` ou un `ETAT.md`.
+# CE QU'IL FERME : un journal s'AJOUTE. Une ligne passée modifiée, ou deux lignes au même `id`,
+# signent une fusion en `union` — que git annonce comme un SUCCÈS : le dégât est muet sans lui.
+# LEVIER SUR LE 22, `FORCE_JOURNAL="motif"` : retirer le doublon qu'une fusion en `union` a
+# fabriqué est la SEULE réécriture licite d'un journal, et sans levier elle serait impossible.
+# PAS de levier sur le 23 : la projection se REFAIT en une commande, il n'y a rien à assumer.
 # La logique n'est PAS recopiée ici : `etat.py check --staged` la porte, et lui seul.
 _ETAT_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/etat.py"
 _NIVEAUX="$(_git_noms ACM \
@@ -675,22 +603,17 @@ if [ -n "$_NIVEAUX" ] && [ "$FAIL" -eq 0 ]; then
 fi
 
 # --- 14. Fichier GELÉ modifié — REFUSE (code 24), levier FORCE_GELE ----------
-# Écrit le 2026-09-08, geste 2.3. Le discriminant est l'en-tête de gel EN PREMIÈRE LIGNE de la
-# version `HEAD` — pas le nom du fichier, pas une liste. `engine/index-fts.py` emploie le même,
-# et un PLAN qui cite cet en-tête plus bas n'est donc pas pris pour une archive.
-# CE QU'IL FERME : une archive gelée est le seul exemplaire de faits qui remontent au 2022 —
-# l'historique git, lui, ne commence qu'au 2026-08-22. Une ligne ajoutée là est un fait écrit
-# dans un fichier que personne ne relit ; une ligne retirée est une perte sans trace.
-# DEUX BRANCHES, et la seconde est celle du commit de gel lui-même : si `HEAD` n'est pas encore
-# gelé mais la version en file l'est, le commit passe À CONDITION que l'en-tête soit le SEUL
-# changement. Sans cette branche, le geste 2.1 n'aurait pas pu être commité par ce contrôle.
-# LEVIER assumé : entre les gestes 2.1 et 2.7 la fiche `archivage` prescrit encore d'écrire dans
-# une archive. `FORCE_GELE="motif" git commit …` est l'échappatoire, tracée.
-# UN FICHIER NEUF QUI NAÎT GELÉ PASSE, posé le 2026-10-01 dans la copie du template (A7) : l'import
-# d'une V1 ou d'une V2 verse gelés les MEMORY.md et les fichiers de reprise de chaque niveau, l'en-tête
-# en première ligne dès la copie. Aucune archive existante n'est touchée. Avant, la seconde branche
-# comparait le corps à un HEAD vide et refusait : un fichier ne pouvait pas naître gelé, et dégelé il
-# aurait crié aux noms morts (code 27) — l'import n'avait aucune voie de commit.
+# Le discriminant est l'en-tête de gel EN PREMIÈRE LIGNE de la version `HEAD` — pas le nom, pas
+# une liste. Un plan qui cite l'en-tête plus bas n'est donc pas pris pour une archive.
+# CE QU'IL FERME : une archive gelée est le seul exemplaire de faits antérieurs à l'historique
+# git. Une ligne ajoutée y est un fait que personne ne relit ; une ligne retirée, une perte.
+# DEUX BRANCHES, la seconde pour le commit de gel lui-même : `HEAD` pas encore gelé, version en
+# file gelée → passe À CONDITION que l'en-tête soit le SEUL changement.
+# UN FICHIER NEUF QUI NAÎT GELÉ PASSE : l'import d'une version antérieure de ClaudeOS verse gelés les
+# MEMORY.md et les fichiers de reprise de chaque niveau, l'en-tête en première ligne dès la copie,
+# et sans cette voie il n'aurait aucun commit possible — dégelé, il crierait aux noms morts (code 27).
+# Le prix est connu : né gelé, il échappe aussi aux contrôles 15 et 16, qui sautent les gelés.
+# Levier tracé : `FORCE_GELE="motif" git commit …`.
 _GEL_MARQUE='> **GELÉ'
 _GELDIV=""
 while IFS= read -r _f; do
@@ -719,11 +642,9 @@ while IFS= read -r _f; do
     git cat-file -e "HEAD:$_f" 2>/dev/null || continue
     _gtete="$(git show "HEAD:$_f" 2>/dev/null)" || _gtete=""
     _gfile="$(git show ":$_f" 2>/dev/null)" || continue
-    # PREMIERE LIGNE PAR EXPANSION, pas par tube — posé le 2026-09-22. `printf … | head -1`
-    # pousse le contenu ENTIER dans un tube que `head` referme après une ligne : au-delà du
-    # tampon du tube, `printf` prend SIGPIPE et bash l'annonce sur STDERR, c'est-à-dire sur le
-    # canal des vraies alarmes. `${v%%$'\n'*}` rend la même valeur — chaîne entière s'il n'y a
-    # pas de saut de ligne, vide si la variable est vide — sans tube ni process.
+    # PREMIÈRE LIGNE PAR EXPANSION, pas par tube : `printf … | head -1` fait prendre SIGPIPE à
+    # `printf` au-delà du tampon, et bash l'annonce sur STDERR, le canal des vraies alarmes.
+    # `${v%%$'\n'*}` rend la même valeur sans tube ni process.
     case "${_gtete%%$'\n'*}" in
         "$_GEL_MARQUE"*)
             [ "$_gtete" = "$_gfile" ] || _GELDIV="$_GELDIV      $_f  — modifié alors qu'il est GELÉ"$'\n'
@@ -753,28 +674,18 @@ if [ -n "$_GELDIV" ] && [ "$FAIL" -eq 0 ]; then
 fi
 
 # --- 15 et 16. Nom de régime mort (code 27) · chemin propre à un poste (code 28) — REFUSENT
-# Écrits le 2026-09-29.
-# CE QU'ILS FERMENT, et pourquoi ils BLOQUENT : un pointeur vers un régime mort ne charge jamais
-# rien, et un chemin du dossier personnel d'un poste est faux sur l'autre — les deux défauts
-# désactivent EN SILENCE. Cas positif réel du 15 : deux agents d'un projet personnel donnaient
-# pour « Racine du projet » l'ancienne racine des dépôts, morte depuis le 2026-09-08 ; trouvés à
-# une passe mensuelle, le 2026-09-24. Cas positif réel du 16 : un `settings.json` a porté le
-# dossier personnel d'un poste comme dépôt de confiance, réinséré par l'outil le 2026-09-16 sans
-# qu'aucun garde au commit ne le voie — le contrôle hebdomadaire AVERTISSAIT, six jours plus tard.
-# PÉRIMÈTRE : les lignes AJOUTÉES du diff en file, tout fichier suivi, MOINS les fichiers GELÉS
-# (en-tête en première ligne, même discriminant que le 14), les archives et les rapports d'audit,
-# les BINAIRES, qui n'ont pas de ligne ajoutée (bloc daté du 2026-10-01 dans la boucle),
-# et le `config.sh` qui déclare les motifs (`CLAUDEOS_TEXTES_HORS_GARDE_RE`). Les motifs, leurs
-# ancrages mesurés et l'absence voulue d'exemption vivent dans `config.sh`, SOURCE UNIQUE, et
-# ne sont pas recopiés ici — ce fichier n'est PAS exclu du périmètre, il ne doit donc pas porter
-# un nom mort en clair, sinon il se refuse lui-même au premier commit qui le touche.
+# POURQUOI ILS BLOQUENT : un pointeur vers un régime mort ne charge jamais rien, et un chemin du
+# dossier personnel d'un poste est faux sur l'autre — les deux défauts désactivent EN SILENCE.
+# PÉRIMÈTRE : les lignes AJOUTÉES du diff en file, tout fichier suivi, MOINS les GELÉS (même
+# discriminant que le 14), les BINAIRES (sans ligne ajoutée), et les textes listés par
+# `CLAUDEOS_TEXTES_HORS_GARDE_RE` (archives, audits, le `config.sh` qui déclare les motifs).
+# Les motifs vivent dans `config.sh`, SOURCE UNIQUE. CE FICHIER N'EST PAS EXCLU : il ne doit
+# porter aucun nom mort en clair, sinon il se refuse lui-même au premier commit qui le touche.
 # PROVENANCE DATÉE : une ligne qui cite un nom mort ET porte une date RACONTE, elle passe
-# (`CLAUDEOS_PROVENANCE_DATEE_RE`) ; sans date elle PRESCRIT, elle est refusée. Observation
-# `e-20260924-202354-f1a6` : quatre citations sur cinq étaient de la provenance.
-# BARRES ÉCHAPPÉES : `\/` est ramené à `/` avant de comparer — l'intégration iTerm2 réécrit
-# `settings.json` ainsi et le motif nu rendait 0 sur dix chemins réels (audit 2026-09-17-mac, M-4).
-# `awk 'NR<=3'` et non `head -3` : `head` referme le tube et le producteur prend SIGPIPE, que bash
-# annonce sur STDERR — le canal des vraies alarmes. Même leçon que la première ligne du contrôle 14.
+# (`CLAUDEOS_PROVENANCE_DATEE_RE`) ; sans date elle PRESCRIT, elle est refusée.
+# BARRES ÉCHAPPÉES : `\/` est ramené à `/` avant de comparer — un outil réécrit `settings.json`
+# ainsi, et le motif nu n'y voyait rien.
+# `awk 'NR<=3'` et non `head -3` : même piège SIGPIPE que la première ligne du contrôle 14.
 # LEVIERS, tracés : FORCE_NOMS_MORTS="motif", FORCE_CHEMIN_POSTE="motif".
 for _v in CLAUDEOS_NOMS_MORTS_RE CLAUDEOS_PROVENANCE_DATEE_RE CLAUDEOS_CHEMIN_POSTE_RE CLAUDEOS_TEXTES_HORS_GARDE_RE; do
     if [ -z "${!_v:-}" ] && [ "$FAIL" -eq 0 ]; then
@@ -785,15 +696,13 @@ for _v in CLAUDEOS_NOMS_MORTS_RE CLAUDEOS_PROVENANCE_DATEE_RE CLAUDEOS_CHEMIN_PO
 done
 _MORTS=""; _POSTE=""
 if [ "$FAIL" -eq 0 ]; then
-    # BINAIRES SAUTÉS — 2026-10-01. La lecture du gel met le
-    # fichier ENTIER dans une variable ; sur un binaire, bash 5 écrit « octet nul ignoré » sur
-    # STDERR, le canal des vraies alarmes — à chaque binaire en file, et un binaire MODIFIÉ suffit :
-    # l'alarme 12 ne regarde que les ajouts. Un binaire n'a aucune ligne ajoutée : `git diff` le dit
-    # « Binary files … differ », avec la même détection que `--numstat`. Le sauter ne change donc
-    # aucun verdict. RESTE CONNU : git juge texte un fichier sans octet nul dans ses 8 000 premiers
-    # octets (frontière mesurée), et un nul plus loin ferait encore parler ce bloc, le contrôle 14 et
-    # un `grep`. Mesuré le 2026-10-01 : aucun des 962 fichiers suivis des cinq dépôts n'est dans ce cas.
-    _BIN1516=$'\n'"$(git diff --cached --numstat --diff-filter=ACM | awk -F'\t' '$1=="-"&&$2=="-"{print $3}')"$'\n'
+    # BINAIRES SAUTÉS : la lecture du gel met le fichier ENTIER dans une variable, et sur un
+    # binaire bash 5 écrit « octet nul ignoré » sur STDERR, le canal des vraies alarmes. Un
+    # binaire n'a aucune ligne ajoutée (même détection que `--numstat`) : le sauter ne change
+    # aucun verdict. LIMITE : git juge texte un fichier sans octet nul dans ses 8 000 premiers
+    # octets ; un nul plus loin ferait encore parler ce bloc et le contrôle 14. Sans git, même
+    # règle, par `regime.py binaires`.
+    _BIN1516=$'\n'"$(_git_binaires ACM)"$'\n'
     while IFS= read -r _f; do
         [ -n "$_f" ] || continue
         case "$_BIN1516" in *$'\n'"$_f"$'\n'*) continue ;; esac

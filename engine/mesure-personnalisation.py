@@ -209,7 +209,10 @@ class Atelier:
         return texte.replace(var, '<ESSAI>').replace(self.home, '<HOME>').replace(self.tmp, '<TMP>')
 
     def lance(self, cmd, var, cwd=None):
-        env = dict(os.environ, HOME=self.home, CLAUDEOS_REG=var)
+        # La session qui lance la mesure ne la colore pas : une session de projet ou un rejeu de
+        # `/demarrage` feraient prendre au démarrage une autre branche que celle de la principale.
+        env = {k: v for k, v in os.environ.items() if k not in ('CLAUDEOS_SESSION_SCOPE', 'CLAUDEOS_BILAN_DEMANDE')}
+        env.update(HOME=self.home, CLAUDEOS_REG=var)
         r = subprocess.run(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         return self.neutre('rc=%d\n' % r.returncode + r.stdout.decode('utf-8', 'replace'), var)

@@ -13,6 +13,11 @@ L'installation et la mise à jour sont conduites par Claude Code lui-même, sur 
 d'un agent livré avec le modèle. Elles consomment votre usage de Claude Code, comme toute autre
 session.
 
+**Pourquoi un dépôt.** Le système vit dans un dépôt versionné d'où l'assistant part à chaque session,
+plutôt que dans une configuration au niveau de l'utilisateur, invisible et qui vieillit sans trace.
+Chaque amélioration du modèle profite à toutes les installations à la mise à jour suivante, sans
+formation.
+
 - [Partie 1 — Installer](#partie-1--installer)
 - [Partie 2 — Mettre à jour](#partie-2--mettre-à-jour)
 
@@ -31,8 +36,8 @@ vérifie leur présence.
 
 | Outil | Rôle | Contrôle |
 | :--- | :--- | :--- |
-| Claude Code 2.1.281 ou ultérieur | exécution de l'agent d'installation | `claude --version` |
-| `python3` 3.8 ou ultérieur, avec FTS5 | le moteur, et l'index de recherche | `python3 -c "import sqlite3; sqlite3.connect(':memory:').execute('create virtual table t using fts5(x)')"` |
+| Claude Code 2.1.287 ou ultérieur | exécution de l'agent d'installation, et bilan d'ouverture de chaque session | `claude --version` |
+| `python3` 3.8 ou ultérieur | le moteur | `python3 --version` |
 | `tmux` | une session par projet | `tmux -V` |
 | `curl` | téléchargement des compétences optionnelles | `curl --version` |
 
@@ -104,8 +109,11 @@ votre modèle ne le prend pas en charge, Claude Code démarre en mode Manual : c
 alors votre accord.
 
 Au moment de la plomberie, l'agent vous communique une ligne à ajouter à votre `~/.zshrc`, ou à
-votre `~/.bashrc` sous WSL : c'est elle qui déclenche le démarrage de ClaudeOS à chaque session. Cet
-ajout vous revient.
+votre `~/.bashrc` sous WSL : à chaque `claude` tapé seul, elle tire vos dépôts et ouvre la session
+principale. Cet ajout vous revient. Le bilan d'ouverture, lui, part de lui-même : un mod livré sous
+`~/.claude/mods/`, que vos réglages chargent, soumet `/demarrage` au premier tour de chaque session.
+S'il ne paraît pas, tapez `/demarrage`, et vérifiez dans `/plugin` que le mod `demarrage-auto` est
+actif : les mods ne tournent pas avec `--safe-mode`, ni quand `disableAllHooks` est posé.
 
 L'agent commence par présenter cinq notions nécessaires à l'usage du système : la clôture, la
 reprise, une session par projet, le contexte et `/compact`, et ce qui quitte votre poste. Chacune se

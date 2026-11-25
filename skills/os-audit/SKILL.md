@@ -1,6 +1,6 @@
 ---
 name: os-audit
-description: "**LA PASSE MENSUELLE du système ClaudeOS** — frictions du mois, trois indicateurs, veille Claude Code, contrôle au jugement sur le travail, puis au plus cinq options que l'utilisateur tranche. Déclencheurs — « audite le système », « lance la passe », « lance un check-up complet », « mon setup est-il périmé », ou le constat que l'agent rate des choses qui existent. La mesure est read-only ; la passe écrit son condensé et ce que l'utilisateur choisit."
+description: "**LA PASSE MENSUELLE du système ClaudeOS** — frictions du mois, trois indicateurs, veille Claude Code, contrôle au jugement sur le travail, puis au plus cinq options que l'utilisateur tranche. Déclencheurs — « audite le système », « lance la passe », « lance un check-up complet », « mon setup est-il périmé », ou le constat que l'agent rate des choses qui existent."
 argument-hint: "[optionnel : AAAA-MM, le mois mesuré]"
 ---
 
@@ -16,6 +16,9 @@ argument-hint: "[optionnel : AAAA-MM, le mois mesuré]"
    proposition qui ajoute une pièce sans gain mesuré n'est pas une amélioration** ; celle qui en
    retire une passe devant.
 
+**La passe ne se clôt pas avec I3 ou le code en hausse**, sauf une ligne « croissance décidée : +N
+octets pour X » au condensé.
+
 **Budget : une passe par mois, trente minutes de présence de l'utilisateur.** Un second passage le
 même mois est un test : il n'écrit pas de condensé, qui écraserait celui du jour. Tout le reste tourne
 sans lui. **Seuil** : une passe qui n'apporte ni constat exclusif touchant le travail — qu'aucune
@@ -27,7 +30,7 @@ cette fiche — **seulement s'il a touché le travail** ; sinon il sort sans rem
 
 ## Règles de mesure
 
-- **La mesure est read-only.** Rien ne se corrige pendant les étapes 0 à 4 ; seule l'étape 5 écrit.
+- **La mesure est read-only.** Rien ne se corrige pendant les étapes 0 à 4 ; seules les étapes 5 et 6 écrivent.
 - **Dates** : les mtimes sont faux (`git checkout` les réécrit). Dater par `git log` et par le `ts`
   des événements de journal, jamais par `ls -lt` ni `find -mtime`.
 - **Nommer le poste mesuré** : un constat de présence, d'absence ou d'usage ne vaut que pour lui.
@@ -37,10 +40,11 @@ cette fiche — **seulement s'il a touché le travail** ; sinon il sort sans rem
 
 ## Étape 0 — La passe précédente
 
-Le dernier condensé : en régime GitHub, le dernier committé,
-`git -C ~/.claude log -1 --format= --name-only -- 'audits/os-audit-*.md'` ; en `GIT=aucun`, le plus
-récent par son nom, `ls ~/.claude/audits/os-audit-*.md | sort | tail -n 1`. Il donne la
-base des indicateurs et ce que l'utilisateur avait choisi : ce qui a été fait, ce qui ne l'a pas été.
+Le dernier condensé : en régime GitHub, le dernier ajouté ou modifié,
+`git -C ~/.claude log -1 --diff-filter=AM --format= --name-only -- 'audits/os-audit-*.md'` — sans
+le filtre, une suppression de condensés rend les noms supprimés ; en `GIT=aucun`, le plus récent par
+son nom, `ls ~/.claude/audits/os-audit-*.md | sort | tail -n 1`. Il donne la base des indicateurs
+et ce que l'utilisateur avait choisi : ce qui a été fait, ce qui ne l'a pas été.
 Un condensé sans indicateurs — ancien format, ou aucune passe — donne sa base par l'en-tête de
 `engine/indicateurs-audit.sh`.
 
@@ -65,6 +69,10 @@ Ce qui a coincé **en séance**, pas ce qu'une inspection de fichiers pourrait t
   (`engine/hooks/rappel-fichiers-nommage.sh`), jugé sur I1.
 - les événements `seance` du mois : leurs `manque_declencheur` et `manque_reprise` nommés, les
   rétractations, les gestes refaits à la main.
+- **le sur-clôturage** : chaque refus de crochet du mois, rejoué contre son juge
+  (`engine/hooks/creation-exemptee.py` pour le nommage), répond à « qu'a-t-il protégé ? ». Un refus
+  qui ne protégeait aucune règle de la fiche exigée est une option : élargir l'exemption, ou retirer
+  la règle.
 
 **Regrouper par cause** : trois frictions d'une même cause font une option, pas trois.
 
@@ -98,8 +106,8 @@ c'est la seule voie par laquelle le faux et la contradiction côté système son
 
 ## Étape 5 — Le menu, puis le condensé
 
-Les options viennent des étapes 1 à 4 et de [`HYGIENE.md`](HYGIENE.md) — règles candidates, fils les
-plus vieux, rangement, fiche au-dessus de son plafond. **Les classer toutes, n'en présenter que
+Les options viennent des étapes 1 à 4 et de [`HYGIENE.md`](HYGIENE.md) — règles candidates, fils
+dormants, rangement, fiche au-dessus de son plafond. **Les classer toutes, n'en présenter que
 cinq**, chacune avec son gain attendu et son coût dans l'unité du créneau, par `AskUserQuestion` —
 **l'utilisateur choisit**. L'outil tient quatre options par question : deux questions à choix
 multiple, système d'un côté, travail et fils de l'autre. Le reste est listé au condensé, sans question.
@@ -114,9 +122,42 @@ Avertissements mécaniques : {liste | aucun}
 Frictions du mois, par cause : {liste | registre vide et séances sans manque — le dire}
 Veille : {options retenues | rien qui passe le filtre}
 Jugement sur le travail : {faits vérifiés, constats | rien de faux sur N faits}
-(chaque constat porte son mode : [trop] · [manquant] · [faux] · [contradictoire])
-Choisi par l'utilisateur : {options} · Écarté : {options}
+(chaque avertissement, friction et constat porte son mode : [trop] · [manquant] · [faux] · [contradictoire])
+Choisi par l'utilisateur :
+1. {option} …
+Écarté : {options | rien}
+Dus ouverts par la passe : {`u-…`, `u-…` | aucun — tout fait dans la passe}
 ```
 
-Chaque option choisie devient un `du` au journal du niveau dans le même geste (compétence
-`reprise`), ou se fait dans la passe si elle tient dans le budget.
+**Le tableau de l'étape 6 lit ce condensé à la lettre** : les en-têtes de section ci-dessus en
+début de ligne, un tag de mode par élément, `**corrigé**` dans un élément corrigé pendant la passe,
+les options choisies en liste numérotée, les refs des dus entre accents graves sur la ligne « Dus
+ouverts ». Un élément sans tag n'est pas compté.
+
+**Chaque option choisie se fait DANS la passe** : un dû renvoyé à la passe suivante s'ajoute à
+ceux qu'elle ouvrira, et la pile ne se solde jamais. Ce qui ne tient pas se fait quand même,
+s'écarte avec son motif, ou se confie à la session de son niveau avec une date — jamais « à la
+prochaine passe ». Les dus encore ouverts par la passe précédente se soldent en tête de celle-ci.
+La ligne « Dus ouverts par la passe » du condensé vise donc « aucun ».
+
+## Étape 6 — Le tableau
+
+La passe finit par une page visuelle, sauf au second passage du même mois, qui n'a pas de condensé.
+
+```bash
+python3 ~/.claude/engine/tableau-audit.py --condense ~/.claude/audits/os-audit-AAAA-MM-JJ.md \
+  --sortie <scratchpad>/passe-mensuelle.html
+```
+
+Le gabarit `TABLEAU.html` porte la mise en page et ne se réécrit pas à la passe. Le script ne sort
+que des comptes, des noms de niveau et des refs, jamais un texte de dû ou de constat : une page qui
+en montrerait un ne se publie pas.
+
+**Publier la page la fait sortir du poste** : seulement si l'outil `Artifact` est disponible, et sur
+l'accord de l'utilisateur, demandé à chaque passe. La première publication pose son URL en pointeur
+`p-tableau-passe` au journal de `~/.claude` ; les suivantes font `read` sur cette URL, puis `publish`
+du fichier avec cette `url`. Sans l'outil ou sans accord, le chemin du fichier local se donne à
+l'utilisateur.
+
+**Fini quand** la page est écrite, et que le condensé nomme son lien publié ou son chemin local.
+Script en échec : le dire au condensé.

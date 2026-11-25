@@ -23,14 +23,16 @@ git -C "$D" status --porcelain -- <chemin du dossier>
 git -C "$D" add <chemin du dossier>
 git -C "$D" commit -m "<projet ou app> : <ce qui a changé>"
 
-# 3. Sortir de la machine.
-git -C "$D" pull --rebase && git -C "$D" push
+# 3. Sortir de la machine : DEUX appels séparés, le code retour du premier lu avant le second
+#    (§ « Ce qui n'est pas vérifié »).
+git -C "$D" pull --rebase
+git -C "$D" push
 ```
 
 Plusieurs dépôts, et la session est déjà ouverte dans le bon : un dépôt nommé en dur serait faux
 partout ailleurs.
 
-**Le message se génère depuis la FILE, jamais depuis l'annonce** *(2026-09-09)*. Décrire ce que
+**Le message se génère depuis la FILE, jamais depuis l'annonce**. Décrire ce que
 `git diff --cached --stat` montre, pas ce qu'on avait prévu de faire : entre l'annonce et le commit
 il y a eu des corrections, des renoncements et des trouvailles, et c'est le message qui devient la
 seule trace de l'écart.
@@ -40,12 +42,12 @@ seule trace de l'écart.
 qu'il y ait dans la file** : le travail qu'un pair y avait mis n'est pas emporté.
 
 **Un fichier NEUF impose un `git add` préalable** — et c'est la seule limite. **Elle ne coûte PAS
-l'isolation.** Mesuré sur pièce pendant qu'un pair écrivait dans le même dépôt :
-`git add <les 2 fichiers neufs>` puis `git commit -F msg -- <dossier> <autre chemin>` a rendu
-**5 fichiers exactement**, les 4 fichiers du pair restant dehors. Ajouter à la file
-n'engage que ce qu'on nomme ; c'est le **pathspec du commit** qui borne, pas l'état de la file.
+l'isolation** : ajouter à la file n'engage que ce qu'on nomme ; c'est le **pathspec du commit** qui
+borne, pas l'état de la file. *(Mesuré pendant qu'un pair écrivait dans le même dépôt : `git add` des
+2 fichiers neufs puis `git commit -F msg -- <chemins>` a rendu 5 fichiers exactement, les 4 du pair
+restant dehors.)*
 
-**Ordre des arguments, payé le même jour** : les chemins APRÈS `--`, le message AVANT.
+**Ordre des arguments** : les chemins APRÈS `--`, le message AVANT.
 `git commit -- <chemins> -m "…"` lit `-m` comme un chemin et échoue.
 
 ## Pousser n'est pas clôturer — le distinguo décide de tout
@@ -86,10 +88,7 @@ git -C "$D" diff --cached --name-only
 Sortie qui déborde du dossier courant = quelqu'un d'autre travaille. **Ne jamais nettoyer la file
 soi-même** : le remonter et attendre. La nettoyer détruirait le travail d'un tiers. La variante `git commit -- <chemins>` ci-dessus est la sortie.
 
-*(Mesuré le 2026-08-20 sous l'ancien moteur : un `git rm` de trois chemins renommés, laissé non
-commité, avait fait refuser le push d'une session de projet. Le script refusait une file non vide.
-Git nu ne refuse rien — la garde a disparu avec lui, et c'est le contrôle ci-dessus qui la
-remplace, à la main.)*
+Git nu ne refuse pas une file non vide : ce contrôle à la main est la seule garde.
 
 ## Ce que le shim absent rend muet
 

@@ -1,0 +1,5 @@
+{
+  "name": "demarrage-auto",
+  "version": "1.0.0",
+  "description": "Lance /demarrage comme premier tour d'une session interactive neuve, sans argument du lanceur."
+}

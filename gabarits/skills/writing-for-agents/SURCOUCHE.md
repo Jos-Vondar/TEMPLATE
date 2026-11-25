@@ -21,12 +21,16 @@ description: "Grille d'écriture de tout document qu'un agent lit — CLAUDE.md,
 >
 > - **`ETAT.md` et les journaux `journal/*.jsonl`** : `ETAT.md` est une PROJECTION, écrite par `etat.py` — la corriger à la main est refusé au commit, et la grille n'a donc aucune prise dessus. Un ÉVÉNEMENT, lui, obéit à son contrat § 3.1, que la machine applique ; ce que l'écriture y ajoute vit dans `memoire-et-verite`, § Formes normalisées.
 > - **Compétences empruntées à un amont** (celles qui portent une bannière « Emprunt », celle-ci comprise) : leur corps est recomposé depuis l'amont par `engine/skills-amont.sh`. Le frontmatter et la bannière sont à nous, le corps est à l'amont.
-> - **Fichiers générés par script** — `memory/PORTFOLIO.md` : le script écrase la correction au premier passage. **Et les GELÉS** : le contrôle 14 refuse le commit.
+> - **Fichiers générés par script** : le script écrase la correction au premier passage. **Et les GELÉS** : le contrôle 14 refuse le commit.
 > - **Livrables destinés à un tiers** : audience humaine, donc la compétence `livrables` quand elle est active.
 >
 > ### Les règles maison
 >
 > Elles vivent dans cette bannière : le corps est un emprunt, recomposé à chaque passe.
+>
+> ### Un texte chargé dit la règle, pas son histoire
+>
+> **Un texte chargé dit la règle et, au plus, sa raison au présent.** Ce qui est au passé ou daté — ancienne formulation, incident, audit — part en `observation` au journal du niveau avant de sortir du texte. Restent : un coût mesuré, l'identifiant d'une décision du journal, « vérifié le … » sourcé, la date qui borne un fait vivant.
 >
 > ### Une consigne NOMMÉE bat un garde formulé en général
 >
@@ -36,7 +40,7 @@ description: "Grille d'écriture de tout document qu'un agent lit — CLAUDE.md,
 >
 > **Corollaire du gabarit** : *tout gabarit obligatoire porte sa variante dégradée. Une case obligatoire sans variante vide est une fabrication programmée* — le modèle a une forme à remplir et rien à y mettre. C'est le remède supérieur quand une forme peut être donnée, et il rejoint la clause du corps : « A prohibition earns its place only as a hard guardrail you cannot phrase positively; even then, pair it with the positive target ». Les deux remèdes ne s'opposent pas, ils répondent à deux défauts distincts — forme obligatoire sans issue → fournir la variante manquante, en entier ; garde générique face à une consigne nommée → énumérer ce sur quoi il est interdit de trancher.
 >
-> **CINQ occurrences mesurées, avec dégât réel** — deux formes : une permission nommée qui bat un garde générique, et un gabarit impératif sans variante vide, qui a fait **inventer** un produit inexistant. La cinquième est sur un artefact distinct et d'une autre main : le motif n'est lié ni à un chantier ni à une famille d'artefacts.
+> **Mesuré cinq fois, avec dégât réel**, sur des artefacts et des mains distincts — dont un gabarit impératif sans variante vide qui a fait **inventer** un produit inexistant.
 
 > ### Tout nombre écrit nomme son unité
 >
@@ -44,18 +48,11 @@ description: "Grille d'écriture de tout document qu'un agent lit — CLAUDE.md,
 >
 > **Corollaire, et c'est lui qui mord le plus** : ni le préfixe, ni le nom, ni le libellé d'un champ ne disent son unité. Un préfixe de colonne ne dit pas « euros ». Et **un modèle qui reçoit un nombre sans unité répond quand même**, avec aplomb.
 >
-> **Cinq occurrences, quatre niveaux, aucune du même domaine.**
-> 1. Un prompt disait « trois au maximum » en comptant des **produits** quand l'unité voulue était le **montage** — l'utilisateur ne voyait que deux propositions, et le modèle obéissait parfaitement.
-> 2. L'en-tête du `MEMORY.md` d'une app justifiait son plafond en **mots** quand la mesure est en **caractères** : une justification entière calibrée sur la mauvaise grandeur.
-> 3. Trois en-têtes voisins du même parc portaient le même défaut.
-> 4. **L'audit lui-même l'a payé** : trois nombres ont circulé pour un seul fichier — 131 310 (octets), 126 701 (caractères), 123 704 (caractères hors commentaires HTML, le seul que le contrôle mesure). Un sous-agent a annoncé des octets en les appelant caractères, dans la passe dont la grille nomme ce piège.
-> 5. **Avec dégât métier, celle-là** : une colonne de base de données était en **milliers d'euros** et aucun des sept prompts de la chaîne ne le disait — les écrans affichaient un montant mille fois trop petit, et ce facteur faussait une éligibilité qui en dépendait.
+> **Exemple, avec dégât métier** : une colonne de base de données était en **milliers d'euros** et aucun des sept prompts de la chaîne ne le disait — les écrans affichaient un montant mille fois trop petit, et ce facteur faussait une éligibilité qui en dépendait.
 >
-> **L'objection « trop évidente pour être écrite » est examinée et écartée** : la règle a été payée cinq fois malgré son évidence, dont trois fois par ce système sur ses propres plafonds et une fois par l'audit chargé de la traquer.
+> **« Trop évident pour être écrit » ne tient pas** : la règle a été payée cinq fois malgré son évidence, dont une par l'audit chargé de la traquer.
 
 > ### Un libellé qui dit croire savoir empêche de regarder
->
-> *Elle réunit deux règles qui se reconduisaient séparément d'audit en audit — le défaut même que la seconde décrit.*
 >
 > **Un intitulé est lu comme un diagnostic, à chaque relecture. Nommé sur la cause supposée plutôt que sur le symptôme observé, il fait chercher au mauvais endroit aussi longtemps qu'il reste ouvert — et chaque relecture reconfirme le mauvais terme.** La reconduction ne retarde pas le travail : **elle protège l'erreur**.
 >
@@ -63,11 +60,11 @@ description: "Grille d'écriture de tout document qu'un agent lit — CLAUDE.md,
 > - **Un fil, une dette, un rappel** se nomme sur le **symptôme**, et sa cause supposée vit dans le corps, **marquée comme hypothèse**. Exiger les deux : un intitulé purement symptomatique est plus dur à retrouver.
 > - **Une mention « hors périmètre »** — « ajouté par un tiers », « configuré côté client », « alimenté par le flux » — dit **ce que le tiers ajoute ET que ça doit exister à la livraison**. Sinon le bloc échappe au contrôle, y compris à un relecteur automatique qui a pourtant chargé la fiche.
 >
-> **Trois occurrences, trois niveaux.** Un fil accusait la division d'un calcul d'ancienneté ; la division était juste, c'était l'unité de la fonction de date — **7 jours** ouvert sur le mauvais terme. Une fiche de format rangeait un tableau hors périmètre en le donnant pour « ajouté par un tiers » : le document est parti sans lui, ni la session ni son relecteur ne l'ont vu manquer. Et un rappel a été **reconduit cinq fois sur trois semaines** en désignant un guide de licences qui ne portait aucune des deux réponses attendues.
+> **Exemple** : un fil accusait la division d'un calcul d'ancienneté ; la division était juste, c'était l'unité de la fonction de date — **7 jours** ouvert sur le mauvais terme.
 
 > ### Le décalage entre deux prompts d'une chaîne ne casse rien et rend faux
 >
-> **Le contrat de sortie de l'étape N est le contrat d'entrée de N+1, et rien ne le vérifie.** Un décalage de forme, de champ, d'unité ou de casse ne lève aucune erreur : l'étape suivante interprète et rend du plausible. **Le défaut n'existe que dans l'écart** — relire chaque prompt isolément ne peut pas le trouver, et les deux autres règles maison ci-dessus visent au contraire un défaut INTERNE à un artefact.
+> **Le contrat de sortie de l'étape N est le contrat d'entrée de N+1, et rien ne le vérifie.** Un décalage de forme, de champ, d'unité ou de casse ne lève aucune erreur : l'étape suivante interprète et rend du plausible. **Le défaut n'existe que dans l'écart** — relire chaque prompt isolément ne peut pas le trouver, et les règles maison ci-dessus visent au contraire un défaut INTERNE à un artefact.
 >
 > **Le geste** : écrire le contrat de passage à un seul endroit, cité par les deux étapes. À défaut, relire les deux prompts **en vis-à-vis**.
 >
@@ -75,8 +72,7 @@ description: "Grille d'écriture de tout document qu'un agent lit — CLAUDE.md,
 > contrat que rien ne vérifie.* Une formule recopiée d'un fichier source vers l'éditeur visuel qui
 > la ressaisit se convertit DEUX fois — séparateur décimal de la locale, et signe égal de tête
 > retiré — et rien ne le signale. Chercher la classe sur toute paire de représentations, pas
-> seulement sur deux prompts. *(Deux défauts dans la même séance, relevés tous deux par
-> l'utilisateur.)*
+> seulement sur deux prompts.
 
 > ### Un critère plus étroit que son étape
 >

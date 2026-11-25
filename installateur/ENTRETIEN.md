@@ -67,6 +67,11 @@ entrer ou sortir.
 | Clé | Question | `oui` fait entrer | `non` |
 | :--- | :--- | :--- | :--- |
 | `MULTIPOSTE` | Travailles-tu, ou travailleras-tu, depuis plusieurs machines ? | jamais de clôture depuis un poste en retard ; aucun chemin propre à un poste dans un fichier suivi ; le démarrage sonde le retard de chaque dépôt | ni ces règles ni la sonde ; une deuxième machine plus tard se règle en rejouant cette seule question |
+
+Avec `MULTIPOSTE=oui`, chaque machine peut porter au journal un nom stable plutôt que son nom réseau :
+une ligne `<empreinte> | <nom au journal> | <libellé>` par poste dans `reglages/POSTES`, l'empreinte
+étant ce que rend `python3 ~/.claude/engine/lib_poste.py` sur ce poste. Facultatif : sans ce fichier,
+le journal garde le nom réseau.
 | `MULTIDOMAINE` | As-tu plusieurs domaines de travail bien distincts — des clients, des pans d'activité ? | la table « Mes domaines » et ses règles : identifier le domaine d'abord, un raté de recherche traité comme un trou de routage | une seule couche de règles pour tout ; la section « Mes domaines » se retire |
 | `LIVRABLE` | Produis-tu des documents destinés à d'autres que toi ? | la compétence `livrables`, et un livrable qui suit ta rubrique « Périmètre du caractère » | la compétence se masque, la règle sort |
 | `CONFIDENTIEL` | Manipules-tu des documents que tu ne peux pas versionner — pièces de clients, données personnelles ? | le réceptacle `_IGNORE/` à la racine de chaque projet, tenu hors sauvegarde ; une suppression y est définitive et se confirme ; deux contrôles hebdomadaires le gardent | aucun réceptacle : un document qui ne doit pas sortir n'a pas de place prévue |
@@ -113,12 +118,13 @@ Même mécanisme, autre sujet : deux appels, quatre questions chacun. Pose chacu
 - **`DOCS_SUR_DEMANDE`** — « Veux-tu qu'il ne crée jamais de fichier de documentation ni de README
   sans que tu l'aies demandé ? »
   - `non` l'autorise à en créer partout où il le juge utile.
-- **`BILAN_DEMARRAGE`** — « Au démarrage de chaque session principale, veux-tu qu'il ouvre sa première
-  réponse par un bilan — poste à jour ou non, tableau d'état, dernière séance, rappels et fils
-  ouverts — suivi d'une proposition de travail pour la journée ? Ou qu'il réponde directement ? »
+- **`BILAN_DEMARRAGE`** — « Au démarrage de chaque session principale, veux-tu qu'elle s'ouvre d'elle-même
+  sur un bilan — synchro des dépôts, fait depuis la dernière séance, rappels et fils ouverts — suivi
+  d'une proposition de travail pour la journée ? Ou qu'elle attende ta demande ? »
   - `non` retire l'état des lieux, la proposition et le relais des rappels et des fils, qu'il faudra
     aller chercher. Restent signalés la dette de sécurité et ce qui menace la sauvegarde : un dépôt
-    qui ne pousse plus, un retard, un distant injoignable.
+    qui ne pousse plus, un retard, un distant injoignable. `/demarrage` rend le bilan à la demande, et
+    les sessions de projet gardent le leur.
   - Ne l'oriente pas, mais n'en cache rien : ce bilan est le cœur de ce que le système ajoute à
     l'outil nu.
 

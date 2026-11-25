@@ -1,0 +1,299 @@
+<title>Passe mensuelle ClaudeOS</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<!-- Gabarit de l'étape 6 d'os-audit. Les données remplacent le marqueur ci-dessous, posé par
+     engine/tableau-audit.py ; ce fichier ne se publie jamais tel quel. -->
+<style>
+/* Layout : une colonne de lecture, résumé en tête, puis quatre sections empilées, du mode de
+   pourriture vers les fils, la tendance et les passes. Tableau de bord de pilote, pas une affiche. */
+:root {
+  --bg: #f6f7f6;
+  --surface: #ffffff;
+  --ink: #16201e;
+  --ink-2: #4d5a57;
+  --ink-3: #7c8784;
+  --rule: #dfe4e2;
+  --grid: #eceff0;
+  --accent: #1d6b62;
+  --juge: #2a78d6;
+  --machine: #eb6834;
+  --age-1: #a9c9ef;
+  --age-2: #5b97e0;
+  --age-3: #1f5aa6;
+  --bon: #1d7a3a;
+  --bon-bg: #e3f2e6;
+  --alerte: #a35c00;
+  --alerte-bg: #fbefd9;
+  --critique: #b42828;
+  --critique-bg: #f9e1e1;
+  --neutre-bg: #eef1f0;
+  --f-display: "Newsreader", Georgia, "Times New Roman", serif;
+  --f-body: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121716; --surface: #1a201f; --ink: #e9eeec; --ink-2: #b4bfbc; --ink-3: #87938f;
+    --rule: #2c3533; --grid: #232b29; --accent: #5fb8ab;
+    --juge: #3987e5; --machine: #d95926;
+    --age-1: #2b4f7e; --age-2: #3f7cc6; --age-3: #8fb8ee;
+    --bon: #6fcf8a; --bon-bg: #19301f; --alerte: #f0b35a; --alerte-bg: #352813;
+    --critique: #f08a8a; --critique-bg: #3a1a1a; --neutre-bg: #242c2a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121716; --surface: #1a201f; --ink: #e9eeec; --ink-2: #b4bfbc; --ink-3: #87938f;
+  --rule: #2c3533; --grid: #232b29; --accent: #5fb8ab;
+  --juge: #3987e5; --machine: #d95926;
+  --age-1: #2b4f7e; --age-2: #3f7cc6; --age-3: #8fb8ee;
+  --bon: #6fcf8a; --bon-bg: #19301f; --alerte: #f0b35a; --alerte-bg: #352813;
+  --critique: #f08a8a; --critique-bg: #3a1a1a; --neutre-bg: #242c2a;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.page { max-width: 960px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 28px; }
+header { display: flex; flex-direction: column; gap: 4px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+h1 { font-family: var(--f-display); font-weight: 600; font-size: 32px; line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--f-display); font-weight: 500; font-size: 22px; margin: 0; text-wrap: balance; }
+.sous { color: var(--ink-2); margin: 0; max-width: 65ch; }
+.mono { font-family: var(--f-data); font-variant-numeric: tabular-nums; }
+.tuiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tuile { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.tuile b { font-family: var(--f-data); font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.tuile span { color: var(--ink-2); font-size: 13px; }
+section { display: flex; flex-direction: column; gap: 12px; }
+.tete { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px; }
+.legende { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--ink-2); }
+.legende i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.carte { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px; min-width: 0; }
+.rangs { display: flex; flex-direction: column; gap: 10px; }
+.rang { display: grid; grid-template-columns: minmax(0, 13rem) minmax(0, 1fr) 4.5rem; align-items: center; gap: 12px; }
+.rang .nom { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.rang .nom small { display: block; color: var(--ink-3); font-size: 12px; }
+.rang .val { text-align: right; font-family: var(--f-data); font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink-2); }
+.piste { height: 14px; display: flex; gap: 2px; background: linear-gradient(to right, var(--grid) 1px, transparent 1px) 0 0 / 10% 100%; border-radius: 0 4px 4px 0; }
+.seg { height: 100%; min-width: 3px; }
+.seg:last-child { border-radius: 0 4px 4px 0; }
+.seg.corrige { background-image: repeating-linear-gradient(135deg, transparent 0 3px, var(--surface) 3px 5px); }
+.legende i.corrige { background: repeating-linear-gradient(135deg, var(--ink-3) 0 3px, var(--surface) 3px 5px); }
+.seg:focus-visible, .point:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.groupe { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); padding-top: 8px; border-top: 1px solid var(--rule); }
+.groupe:first-child { border-top: 0; padding-top: 0; }
+.note { font-size: 13px; color: var(--ink-3); margin: 0; max-width: 70ch; }
+.tendances { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.tendance { display: flex; flex-direction: column; gap: 6px; }
+.tendance .valeur { font-family: var(--f-data); font-size: 22px; font-variant-numeric: tabular-nums; }
+.tendance .delta { font-size: 13px; color: var(--ink-2); }
+.tendance svg { width: 100%; height: 56px; overflow: visible; }
+.passes { display: flex; flex-direction: column; gap: 10px; }
+.passe { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 12px; align-items: start; padding-top: 10px; border-top: 1px solid var(--rule); }
+.passe:first-child { border-top: 0; padding-top: 0; }
+.puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.puce { font-family: var(--f-data); font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--neutre-bg); color: var(--ink-2); }
+.puce.solde { background: var(--bon-bg); color: var(--bon); }
+.puce.ouvert { background: var(--alerte-bg); color: var(--alerte); }
+.puce.introuvable { background: var(--critique-bg); color: var(--critique); }
+#bulle { position: fixed; pointer-events: none; z-index: 20; background: var(--ink); color: var(--bg); font-size: 12px; padding: 6px 8px; border-radius: 4px; max-width: 18rem; }
+.vide { color: var(--ink-3); font-style: italic; }
+@media (max-width: 640px) {
+  .tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tendances { grid-template-columns: minmax(0, 1fr); }
+  .rang { grid-template-columns: minmax(0, 1fr) 3.5rem; }
+  .rang .piste { grid-column: 1 / -1; grid-row: 2; }
+  .passe { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+@media (prefers-reduced-motion: no-preference) { .seg { transition: opacity .15s; } }
+.rangs:hover .seg { opacity: .75; } .rangs .seg:hover { opacity: 1; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow" id="eyebrow">Passe mensuelle</div>
+    <h1 id="titre">Passe mensuelle ClaudeOS</h1>
+    <p class="sous" id="sous"></p>
+  </header>
+
+  <div class="tuiles" id="tuiles"></div>
+
+  <section aria-labelledby="h-modes">
+    <div class="tete">
+      <h2 id="h-modes">Où l'information pourrit</h2>
+      <div class="legende"><span><i style="background:var(--juge)"></i>constat jugé à la passe</span><span><i style="background:var(--machine)"></i>signal mécanique</span><span><i class="corrige"></i>hachuré : corrigé dans la passe</span></div>
+    </div>
+    <div class="carte"><div class="rangs" id="modes"></div></div>
+    <p class="note">Les deux couches ne s'additionnent pas en une mesure : la première compte ce que la passe a regardé, la seconde ce que les contrôles ont relevé. Le détail de chaque constat est dans le condensé de la passe.</p>
+  </section>
+
+  <section aria-labelledby="h-fils">
+    <div class="tete">
+      <h2 id="h-fils">Fils ouverts par projet</h2>
+      <div class="legende"><span><i style="background:var(--age-1)"></i>moins de 30 j</span><span><i style="background:var(--age-2)"></i>30 à 60 j</span><span><i style="background:var(--age-3)"></i>plus de 60 j</span></div>
+    </div>
+    <div class="carte"><div class="rangs" id="fils"></div></div>
+    <p class="note">Âge compté depuis la naissance du fil ; un âge marqué d'un tilde dans <span class="mono">etat.py fils</span> est inféré de la plus vieille date de son texte. Colonne de droite : ouverts · dormants (non touchés depuis 30 j).</p>
+  </section>
+
+  <section aria-labelledby="h-ind">
+    <div class="tete"><h2 id="h-ind">Indicateurs, passe après passe</h2></div>
+    <div class="tendances" id="tendances"></div>
+  </section>
+
+  <section aria-labelledby="h-rates">
+    <div class="tete"><h2 id="h-rates">Ratés de routage depuis la passe précédente</h2></div>
+    <div class="carte"><div class="rangs" id="rates"></div></div>
+  </section>
+
+  <section aria-labelledby="h-passes">
+    <div class="tete"><h2 id="h-passes">Ce que les passes ont décidé</h2></div>
+    <div class="carte"><div class="passes" id="passes"></div></div>
+  </section>
+</div>
+<div id="bulle" hidden></div>
+
+<script>
+const D = /*__DONNEES__*/null;
+const MODES = [
+  ["faux", "Faux", "poisoning"], ["trop", "Trop", "bloat"],
+  ["manquant", "Manquant", "confusion"], ["contradictoire", "Contradictoire", "clash"]];
+const IND = { I1: ["Frictions par séance", 2], I2: ["Octets chargés par session", 0], I3: ["Octets d'instructions", 0] };
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+const fmt = (v, d = 0) => v == null ? "—" : v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+const bulle = $("bulle");
+function tip(node, texte) {
+  node.tabIndex = 0; node.setAttribute("aria-label", texte);
+  const show = (x, y) => { bulle.textContent = texte; bulle.hidden = false;
+    const r = bulle.getBoundingClientRect();
+    bulle.style.left = Math.max(8, Math.min(x + 12, innerWidth - r.width - 8)) + "px";
+    bulle.style.top = Math.max(8, y - r.height - 10) + "px"; };
+  node.addEventListener("mousemove", (e) => show(e.clientX, e.clientY));
+  node.addEventListener("focus", () => { const r = node.getBoundingClientRect(); show(r.left + r.width / 2, r.top); });
+  ["mouseleave", "blur"].forEach((ev) => node.addEventListener(ev, () => { bulle.hidden = true; }));
+}
+function rang(nom, petit, segments, max, val) {
+  const r = el("div", "rang");
+  const n = el("div", "nom", nom); if (petit) n.appendChild(el("small", null, petit)); r.appendChild(n);
+  const p = el("div", "piste");
+  segments.filter((s) => s.n > 0).forEach((s) => {
+    const seg = el("div", s.corrige ? "seg corrige" : "seg"); seg.style.width = (100 * s.n / max) + "%"; seg.style.backgroundColor = s.c; tip(seg, s.t); p.appendChild(seg); });
+  r.appendChild(p); r.appendChild(el("div", "val", val)); return r;
+}
+
+function rendre() {
+  if (!D) { $("sous").textContent = "Gabarit sans données : la page se génère par engine/tableau-audit.py."; return; }
+  $("eyebrow").textContent = `Passe du ${D.passe}` + (D.poste ? ` · ${D.poste}` : "");
+  $("sous").textContent = D.precedente ? `Comparée à la passe du ${D.precedente}. Comptes et identifiants seulement : le texte des fils et des constats reste sur le poste.` : "Première passe mesurée.";
+
+  const juges = MODES.reduce((s, [k]) => s + D.modes.juge[k], 0);
+  [[D.fils.total, "fils ouverts"], [D.fils.dormants, "dormants, non touchés depuis 30 j"],
+   [D.fils.plus30, "ouverts depuis plus de 30 j"], [juges, "constats jugés à cette passe"]]
+    .forEach(([v, t]) => { const c = el("div", "tuile"); c.appendChild(el("b", null, fmt(v))); c.appendChild(el("span", null, t)); $("tuiles").appendChild(c); });
+
+  const maxM = Math.max(1, ...MODES.map(([k]) => D.modes.juge[k] + D.modes.machine[k]));
+  MODES.forEach(([k, nom, en]) => {
+    const j = D.modes.juge[k], m = D.modes.machine[k];
+    const cj = (D.corriges && D.corriges.juge[k]) || 0, cm = (D.corriges && D.corriges.machine[k]) || 0;
+    const extra = k === "trop" && D.dormants ? ` (dont les ${fmt(D.dormants)} fils dormants, comptés comme un signal)` : "";
+    $("modes").appendChild(rang(nom, en, [
+      { n: j - cj, c: "var(--juge)", t: `${nom} : ${j - cj} constat(s) jugé(s) encore ouvert(s)` },
+      { n: cj, c: "var(--juge)", corrige: true, t: `${nom} : ${cj} constat(s) jugé(s) corrigé(s) dans la passe` },
+      { n: m - cm, c: "var(--machine)", t: `${nom} : ${m - cm} signal(aux) mécanique(s) ouvert(s)${extra}` },
+      { n: cm, c: "var(--machine)", corrige: true, t: `${nom} : ${cm} signal(aux) mécanique(s) corrigé(s) dans la passe` }],
+      maxM, `${j} · ${m}`));
+  });
+
+  const niv = Object.entries(D.fils.niveaux);
+  const maxF = Math.max(1, ...niv.map(([, t]) => t.moins30 + t.de30a60 + t.plus60));
+  // Un niveau se nomme comme dans `etat.py fils --json` : « systeme » est ~/.claude,
+  // « systeme/travail/<D>/… » un dossier de travail sans dépôt propre, « <DÉPÔT>/… » un dossier
+  // sous son dépôt. Rendu : [groupe, nom de la ligne].
+  const decoupe = (n) => {
+    if (n === "systeme") return ["Système", "~/.claude"];
+    const p = n.split("/");
+    if (p[0] === "systeme" && p[1] === "travail" && p.length > 2) return [p[2], p.length > 3 ? p.slice(3).join("/") : "racine du domaine"];
+    if (p[0] === "systeme") return ["Système", "~/.claude/" + p.slice(1).join("/")];
+    return [p[0], p.length > 1 ? p.slice(1).join("/") : "racine du dépôt"];
+  };
+  const parDepot = {};
+  niv.forEach(([n, t]) => { const d = decoupe(n)[0]; (parDepot[d] = parDepot[d] || []).push([n, t]); });
+  Object.entries(parDepot).sort((a, b) => b[1].reduce((s, [, t]) => s + t.moins30 + t.de30a60 + t.plus60, 0) - a[1].reduce((s, [, t]) => s + t.moins30 + t.de30a60 + t.plus60, 0))
+    .forEach(([depot, lignes]) => {
+      $("fils").appendChild(el("div", "groupe", depot));
+      lignes.forEach(([n, t]) => {
+        const nom = decoupe(n)[1];
+        const tot = t.moins30 + t.de30a60 + t.plus60;
+        $("fils").appendChild(rang(nom, null, [
+          { n: t.moins30, c: "var(--age-1)", t: `${nom} : ${t.moins30} fil(s) de moins de 30 j` },
+          { n: t.de30a60, c: "var(--age-2)", t: `${nom} : ${t.de30a60} fil(s) de 30 à 60 j` },
+          { n: t.plus60, c: "var(--age-3)", t: `${nom} : ${t.plus60} fil(s) de plus de 60 j` }], maxF, `${tot} · ${t.dormants}`));
+      });
+    });
+
+  Object.entries(IND).forEach(([k, [nom, dec]]) => {
+    const pts = (D.indicateurs && D.indicateurs[k]) || [];
+    const c = el("div", "carte tendance");
+    c.appendChild(el("div", "eyebrow", `${k} · ${nom}`));
+    const der = pts[pts.length - 1];
+    c.appendChild(el("div", "valeur", der ? fmt(der.valeur, dec) : "—"));
+    const av = pts[pts.length - 2];
+    let delta = "Pas encore de point de comparaison.";
+    if (der && av && der.rupture) delta = "Définition changée à cette passe : pas de variation comparable.";
+    else if (der && av) { const d = der.valeur - av.valeur; delta = `${d >= 0 ? "+" : "−"}${fmt(Math.abs(d), dec)} depuis le ${av.passe} (${d >= 0 ? "+" : "−"}${fmt(Math.abs(100 * d / av.valeur), 0)} %)`; }
+    c.appendChild(el("div", "delta", delta));
+    c.appendChild(courbe(pts, nom, dec));
+    $("tendances").appendChild(c);
+  });
+
+  const rates = Object.entries(D.rates || {});
+  if (!rates.length) $("rates").appendChild(el("p", "vide", D.rates ? "Aucun raté consigné sur la période." : "Registre illisible."));
+  const maxR = Math.max(1, ...rates.map(([, n]) => n));
+  rates.forEach(([c, n]) => $("rates").appendChild(rang(c, null, [{ n, c: "var(--juge)", t: `${c} : ${n} raté(s)` }], maxR, String(n))));
+
+  const passes = (D.passes || []).slice().reverse();
+  if (!passes.length) $("passes").appendChild(el("p", "vide", "Aucune passe antérieure au format lisible."));
+  passes.forEach((p) => {
+    const r = el("div", "passe");
+    const g = el("div"); g.appendChild(el("div", "mono", p.passe)); g.appendChild(el("small", "note", `${p.choisies} option(s) choisie(s)`)); r.appendChild(g);
+    const pu = el("div", "puces");
+    if (p.dus === null) pu.appendChild(el("span", "note", "Sort des décisions non mesuré : condensé antérieur à la ligne « Dus ouverts par la passe »."));
+    else if (!Object.keys(p.dus).length) pu.appendChild(el("span", "note", "Aucun dû ouvert : tout s'est fait dans la passe."));
+    else Object.entries(p.dus).forEach(([ref, s]) => { const lib = { solde: "soldé", ouvert: "ouvert", abandonne: "abandonné", introuvable: "introuvable" }[s] || s;
+      const x = el("span", `puce ${s}`, `${ref} · ${lib}`); pu.appendChild(x); });
+    r.appendChild(pu); $("passes").appendChild(r);
+  });
+}
+
+function courbe(pts, nom, dec) {
+  const NS = "http://www.w3.org/2000/svg", W = 300, H = 56, P = 6;
+  const s = document.createElementNS(NS, "svg"); s.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  s.setAttribute("role", "img"); s.setAttribute("aria-label", `${nom} : ` + pts.map((p) => `${p.passe} ${fmt(p.valeur, dec)}`).join(", "));
+  if (!pts.length) return s;
+  // Une rupture de définition coupe la série : chaque tronçon a sa propre échelle verticale.
+  const troncons = []; pts.forEach((p, i) => { if (i === 0 || p.rupture) troncons.push([]); troncons[troncons.length - 1].push([i, p]); });
+  const x = (i) => pts.length === 1 ? W / 2 : P + i * (W - 2 * P) / (pts.length - 1);
+  const ligne = (a, b, c, d, attrs) => { const l = document.createElementNS(NS, "line"); Object.entries({ x1: a, y1: b, x2: c, y2: d, ...attrs }).forEach(([k, v]) => l.setAttribute(k, v)); s.appendChild(l); };
+  ligne(0, H - 1, W, H - 1, { stroke: "var(--grid)", "stroke-width": 1 });
+  troncons.forEach((t) => {
+    const vs = t.map(([, p]) => p.valeur), lo = Math.min(...vs), hi = Math.max(...vs);
+    const y = (v) => hi === lo ? H / 2 : H - P - (v - lo) * (H - 2 * P) / (hi - lo);
+    if (t.length > 1) { const pl = document.createElementNS(NS, "polyline");
+      pl.setAttribute("points", t.map(([i, p]) => `${x(i)},${y(p.valeur)}`).join(" "));
+      pl.setAttribute("fill", "none"); pl.setAttribute("stroke", "var(--accent)"); pl.setAttribute("stroke-width", 2); pl.setAttribute("vector-effect", "non-scaling-stroke"); s.appendChild(pl); }
+    t.forEach(([i, p], j) => {
+      if (j === 0 && p.rupture) ligne(x(i) - (W - 2 * P) / (2 * Math.max(1, pts.length - 1)), 0, x(i) - (W - 2 * P) / (2 * Math.max(1, pts.length - 1)), H, { stroke: "var(--ink-3)", "stroke-dasharray": "3 3", "stroke-width": 1, "vector-effect": "non-scaling-stroke" });
+      const c = document.createElementNS(NS, "circle"); c.setAttribute("cx", x(i)); c.setAttribute("cy", y(p.valeur)); c.setAttribute("r", 4);
+      c.setAttribute("fill", "var(--accent)"); c.setAttribute("stroke", "var(--surface)"); c.setAttribute("stroke-width", 2); c.setAttribute("class", "point");
+      tip(c, `${p.passe} : ${fmt(p.valeur, dec)}` + (p.rupture ? " — définition changée, non comparable au point d'avant" : "")); s.appendChild(c);
+    });
+  });
+  return s;
+}
+rendre();
+</script>

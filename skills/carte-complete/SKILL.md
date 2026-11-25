@@ -13,8 +13,8 @@ description: Recherche infructueuse — un fichier annoncé reste introuvable, o
 Le règlement garde les règles mères (socle, « Recherche et preuve ») : *une recherche qui ne trouve rien ne prouve rien tant qu'on n'a pas varié le motif et établi le périmètre*. Les cas particuliers vivent ici.
 
 - Axes de variation : nom court contre nom long, casse, synonyme. Et l'axe compte autant que le nombre — **un usage se cherche par la formulation qui l'appelle, pas par le nom de l'outil** : un nom officiel change, la façon dont on demande la chose, non.
-- **Dire sur quelle fraction de la sortie on conclut — la troncature a DEUX origines.** **SUBIE** : l'outil coupe sans le dire, la sortie ressemble à une sortie complète — la rouvrir entière, ou découper la recherche pour qu'elle tienne à l'écran. **CHOISIE** : `| head -N`, `| tail -N`, `--max-count`, un `[:300]` en Python — **compter d'abord** (`grep -c`, `wc -l`), et ne conclure une absence que sur un compte. Le second cas est le plus retors : on a posé la borne soi-même quelques secondes plus tôt, on l'oublie, et la sortie qu'on relit a l'air entière. *Payé une fois : une session de projet a listé les sections d'un document par `grep | head -60`, conclu qu'il s'arrêtait deux versions trop tôt, et ouvert un fil de dette sur cette prémisse — le `head` coupait avant les trois sections qui existaient.*
-- **Le PÉRIMÈTRE avant la technique, et l'étoile avant le stemmer.** `délég*` trouve ce que `déléguer` manque ; et restreindre le corpus aux descriptions de compétences bat toute technique de recherche, sémantique comprise. **Vide sur plusieurs motifs → escalader** : `python3 ~/.claude/engine/index-fts.py --reconstruit` puis `--requete '<mots>'` ; il applique l'étoile lui-même et dit son périmètre.
+- **Dire sur quelle fraction de la sortie on conclut — la troncature a DEUX origines.** **SUBIE** : l'outil coupe sans le dire, la sortie ressemble à une sortie complète — la rouvrir entière, ou découper la recherche pour qu'elle tienne à l'écran. **CHOISIE** : `| head -N`, `| tail -N`, `--max-count`, un `[:300]` en Python — **compter d'abord** (`grep -c`, `wc -l`), et ne conclure une absence que sur un compte. Le second cas est le plus retors : on a posé la borne soi-même quelques secondes plus tôt, on l'oublie, et la sortie qu'on relit a l'air entière — un `grep | head -60` qui coupe avant les dernières sections fait conclure qu'un document s'arrête plus tôt qu'il ne s'arrête.
+- **Le PÉRIMÈTRE avant la technique, et l'étoile avant le stemmer.** `délég*` trouve ce que `déléguer` manque ; et restreindre le corpus aux descriptions de compétences bat toute technique de recherche, sémantique comprise.
 - **Une recherche muette sur un fichier jugé binaire est un refus, pas un résultat.**
 - **Sur un format structuré, JSON ou YAML, le périmètre est le NŒUD, jamais une distance en
   caractères.** Une fenêtre autour d'un motif rend vide quand la cible vit dans un nœud frère, et
@@ -88,7 +88,7 @@ Géré par l'outil, ne pas y toucher ni s'y fier comme source : `projects/` (tra
 
 ## Machinerie
 
-`~/.claude/engine/` porte les scripts : bilan de démarrage, clôture, contrôles hebdomadaires, contrôle des secrets, journal d'état et sa projection, index de recherche, registre des livrables, installation d'un poste, ouverture de session, bloc d'imports du règlement (`appliquer-reponses.py`), composition des compétences optionnelles (`skills-amont.sh`). Le crochet d'alarmes est sous `engine/hooks/`. Les réglages du poste sont dans `~/.claude/reglages/`, jamais dans `engine/`, qui appartient au template.
+`~/.claude/engine/` porte les scripts : bilan de démarrage, clôture, contrôles hebdomadaires, contrôle des secrets, journal d'état et sa projection, installation d'un poste, ouverture de session, bloc d'imports du règlement (`appliquer-reponses.py`), composition des compétences optionnelles (`skills-amont.sh`). Le crochet d'alarmes est sous `engine/hooks/`. Les réglages du poste sont dans `~/.claude/reglages/`, jamais dans `engine/`, qui appartient au template.
 
 `~/.claude/resources/` porte le gabarit de création de domaine.
 
@@ -96,7 +96,7 @@ Géré par l'outil, ne pas y toucher ni s'y fier comme source : `projects/` (tra
 
 **`<MÉMOIRE>` = `~/.claude/memory/`**, l'emplacement que `autoMemoryDirectory` donne à l'outil. Écrire par ce chemin ; un dossier `~/.claude/projects/<slug>/` porte un nom propre au poste — **ne jamais l'écrire en dur ; au moindre doute, lister `~/.claude/projects/`.**
 
-- `<MÉMOIRE>/PORTFOLIO.md` — ce qu'on a produit, fil du temps par projet. Généré, ne pas éditer ; régénéré **à la demande** par `engine/build-portfolio.sh`. Y aller sur « qu'a-t-on livré », « où en est ce projet depuis le début ».
+- « Qu'a-t-on livré », « où en est ce projet » — l'`ETAT.md` du niveau et son journal : `python3 ~/.claude/engine/etat.py vue --tous`.
 - `<MÉMOIRE>/IDEES_FROIDES.md` — idées lancées en passant, hors des chantiers engagés. Y aller quand l'utilisateur lance une idée hors sujet, ou demande une revue d'idées.
 - `~/.claude/audits/` — rapports de la passe mensuelle : audit lancé, **lire le précédent d'abord**.
 
@@ -108,7 +108,11 @@ La table « Mes domaines » reste au `CLAUDE.md` racine et ne descend pas ici : 
 - `python3 ~/.claude/engine/etat.py fils --tous` — ce qui reste à faire, par ancienneté, calculé depuis les journaux. Y aller pour proposer le travail du jour ou arbitrer des priorités.
 - **Les fichiers GELÉS** — ceux qu'une migration depuis une V1 ou une V2 a gelés, en-tête de gel en première ligne. Ils sont en lecture seule et **rien ne les régénère** : le crochet refuse toute écriture. Ils portent l'histoire d'avant la migration et **se cherchent au `grep`**, jamais en s'y fiant pour l'état courant. Ce qu'ils portaient de vivant a déménagé : la carte de rappel est `## Où trouver` d'`ETAT.md`, le récit d'une séance est un événement `seance`, une règle candidate est un `du` du chantier `regles-candidates`.
 - `<MÉMOIRE>/REMINDERS.md` et `<MÉMOIRE>/SECURITY_DEBT.md` — rappels datés et dette de sécurité. Relayés au démarrage, purgés au traitement. Jamais de valeur de secret dans le second : identité, emplacement, statut.
-- **Plans et specs** — `~/.claude/docs/{plans,specs}/` pour le système · le `docs/` du domaine pour un plan qui lui est propre · `<projet ou app>/docs/{plans,specs}/` sinon (compétence `fichiers-et-nommage`). Y aller à l'exécution d'un plan écrit.
+- **Le récit d'une règle** se cherche au journal du niveau, par `grep` sur ses événements
+  `observation` ; ce qui précède une migration depuis une V1 ou une V2, dans les fichiers gelés.
+- **Plans et specs — seule autorité de ces emplacements** : `~/.claude/docs/{plans,specs}/` pour le
+  système · le `docs/` du domaine pour un plan qui lui est propre · `<projet ou app>/docs/{plans,specs}/`
+  sinon. Jamais le `plans/` de l'outil, exclu de la sauvegarde. Y aller à l'exécution d'un plan écrit.
 
 ## Une mémoire de session par répertoire de travail
 

@@ -31,17 +31,26 @@ Procédure de l'agent, mode `v3`, quand la personne veut la version suivante (`L
 
 1. **L'ascendance, une seule fois.** Le dépôt venu du bouton n'a aucun ancêtre commun avec le
    template. Fusionné sans elle, chaque fichier que la version change sortirait en conflit, ceux
-   qu'elle n'a jamais touchés compris. La version installée se lit dans `~/.claude/engine/VERSION`.
-   Si `git -C ~/.claude merge-base --is-ancestor v<installée> HEAD` rend `1`, pose son étiquette
-   comme ancêtre, sans changer aucun fichier :
+   qu'elle n'a jamais touchés compris. Si `git -C ~/.claude merge-base HEAD upstream/main` rend un
+   commit, l'ascendance est déjà posée : passe au geste 2. S'il ne rend rien, pose comme ancêtre,
+   sans changer aucun fichier, le commit du template dont l'arbre égale celui du premier commit du
+   dépôt :
 
    ```bash
-   git -C ~/.claude merge -s ours --allow-unrelated-histories --no-edit \
-     -m "ClaudeOS : ascendance du template v<installée>" v<installée>
+   git -C ~/.claude fetch upstream --tags
+   A=$(git -C ~/.claude rev-parse "$(git -C ~/.claude rev-list --max-parents=0 HEAD)^{tree}")
+   B=$(git -C ~/.claude log upstream/main --format='%H %T' | awk -v t="$A" '$2 == t { print $1; exit }')
+   [ -n "$B" ] && git -C ~/.claude merge -s ours --allow-unrelated-histories --no-edit -m "ClaudeOS : ascendance du modèle" "$B"
    ```
 
-   Contrôle : `git -C ~/.claude diff --stat HEAD~1 HEAD` ne rend rien. Si `merge-base --is-ancestor`
-   rend `0`, l'ascendance est déjà posée : passe au geste 2.
+   - **`B` vide** : aucun commit de `upstream/main` n'a l'arbre du bouton. Arrête-toi et dis-le,
+     sans fusionner la version.
+   - **Le commit se cherche par son arbre, pas par l'étiquette installée** : le bouton a pu être
+     cliqué sur un commit de `main` postérieur à elle, et l'étiquette mettrait alors en conflit les
+     fichiers que ce commit a changés.
+
+   Fin du geste : `git -C ~/.claude diff --stat HEAD~1 HEAD` ne rend rien, et
+   `git -C ~/.claude merge-base HEAD upstream/main` rend le commit trouvé, `B`.
 2. **La version** :
 
    ```bash

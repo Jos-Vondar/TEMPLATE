@@ -6,8 +6,16 @@
 # toi vit dans `reglages/` et ne se touche jamais par une mise à jour.
 # =============================================================================
 
-SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # .../.claude/engine
-ROOT="$(cd "$SELF/.." && pwd)"                          # .../.claude = le système
+# Sourcé aussi sous zsh, où `BASH_SOURCE` est vide : zsh met dans `$0` le chemin du fichier sourcé
+# (`:a` absolu, liens gardés, `:h` parent), sans `cd` qui déclencherait un crochet `chpwd`.
+# Même idiome que `claudeos-boot.sh`.
+if [ -n "${ZSH_VERSION:-}" ]; then
+    SELF=${0:a:h}                                       # .../.claude/engine
+    ROOT=${SELF:h}                                      # .../.claude = le système
+else
+    SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    ROOT="$(cd "$SELF/.." && pwd)"
+fi
 
 # Références du moteur, livrées avec lui : la liste noire des dépôts de travail et le pilote
 # de fusion des journaux. Aucun réglage de poste ne vit ici.
@@ -36,42 +44,24 @@ claudeos_liste() {
     printf '%s\n' "$v" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' || true
 }
 
-# La mémoire est CANONIQUE ici depuis le 2026-08-22. Depuis le 2026-09-24 l'outil y écrit
-# directement, par `autoMemoryDirectory` dans `settings.json` : plus de slug à calculer.
+# La mémoire est canonique ici ; l'outil y écrit directement (`autoMemoryDirectory` de `settings.json`).
 MEM="$HOME/.claude/memory"
 # Tilde LITTÉRAL pour abréger un chemin à l'affichage : `${d/#$HOME/$CLAUDEOS_TILDE}`. La forme
-# `${d/#$HOME/\~}` rend `\~/…` sous le bash 3.2 d'Apple — constat K1 de l'audit de portabilité,
-# corrigé le 2026-09-23 ; un `~` nu serait réexpansé en `$HOME` par bash 5. Par une variable,
-# les deux rendent `~/…` : VÉRIFIÉ sous 3.2.57 et 5.3.
+# `${d/#$HOME/\~}` rend `\~/…` sous le bash 3.2 d'Apple, et un `~` nu est réexpansé en `$HOME`
+# par bash 5. Par une variable, les deux rendent `~/…`.
 CLAUDEOS_TILDE='~'
 
-# Queue du chemin du shim de hook — SOURCE UNIQUE. Elle était écrite deux fois, dans
-# `claudeos-cloture.sh` et `install-poste.sh` : déménager le hook demandait d'éditer deux scripts,
-# et celui qu'on oubliait aurait accepté un shim périmé sans rien dire.
+# Queue du chemin du shim de hook — SOURCE UNIQUE, lue par `claudeos-cloture.sh` et `install-poste.sh` :
+# la copie qu'on oublierait au déménagement du hook accepterait un shim périmé sans rien dire.
 CLAUDEOS_SHIM_TAIL='.claude/engine/hooks/pre-commit-alarmes.sh'
 
-# `claudeos_require_remote` et sa variable `REMOTE_MATCH` SUPPRIMÉES le 2026-08-22, sur
-# décision de l'utilisateur, après l'audit contradictoire. La fonction refusait d'opérer si
-# l'origin de `$ROOT` ne correspondait pas. Deux motifs : elle n'avait plus d'appelant depuis
-# la mort de `backup.sh`, et surtout elle ne connaissait qu'UN dépôt — le système — alors que
-# la clôture en pousse deux. Un garde qui ne couvre que la moitié de ce qu'il prétend garder
-# ment sur sa portée. L'URL du dépôt système est celle que git connaît
-# (`git remote get-url origin`) : aucun fichier ne la recopie.
-
 # claudeos_epoch_of_date — rend l'époque UNIX de minuit d'une date ISO (AAAA-MM-JJ) sur la sortie
-# standard, ou RIEN et un code non nul si elle est illisible. Posé le 2026-09-12.
-#
-# POURQUOI. Trois lignes de `boot-check.sh` appelaient `date -d`, qui est une EXTENSION GNU : BSD
-# répond `illegal option -- d`. Chacune portait un repli `2>/dev/null || echo 0`, donc l'erreur
-# était avalée et la sonde rendait 0 — rappels échus jamais affichés, audit jamais signalé dû,
-# journal jamais signalé périmé. Trois alarmes VERTES PAR CONSTRUCTION, sans un mot : exactement ce
-# que le système dit refuser. Mesuré le 2026-09-12 sous PATH système : 0 là où la vérité était 42 j.
-#
-# DEUX BRANCHES, toutes deux EXACTES, et dans cet ordre. `date -d` d'abord : c'est le chemin du PC
-# sous WSL et d'un Mac dont le PATH porte les coreutils GNU, sans coût de démarrage. `python3`
-# ensuite, déjà dépendance dure du moteur (`etat.py`), et déterministe. La forme BSD `date -j -f`
-# est ÉCARTÉE VOLONTAIREMENT : sur un format sans heure elle complète avec l'heure COURANTE, ce qui
-# décale l'époque dans la journée et peut faire basculer un écart en jours d'une unité.
+# standard, ou RIEN et un code non nul si elle est illisible.
+# `date -d` est une extension GNU, refusée par BSD : un repli `|| echo 0` changerait l'erreur en
+# alarme verte par construction (rappel jamais échu, audit jamais dû). L'échec se rend.
+# Deux branches exactes, dans cet ordre : `date -d` (GNU, sans coût), puis `python3`, dépendance
+# dure du moteur. La forme BSD `date -j -f` est écartée : sur un format sans heure elle complète
+# avec l'heure COURANTE, et peut faire basculer un écart en jours d'une unité.
 claudeos_epoch_of_date() {
     [ -n "${1:-}" ] || return 1
     date -d "$1" +%s 2>/dev/null && return 0
@@ -79,14 +69,10 @@ claudeos_epoch_of_date() {
     return 1
 }
 
-# claudeos_hash_file — empreinte d'un fichier, sur la sortie standard, sans le nom. Posé le 2026-09-12.
-#
-# POURQUOI. `md5sum` est un outil GNU : macOS livre `md5` (syntaxe différente) et `shasum`. Le
-# contrôle 27ter de `weekly-check.sh` comparait des copies de scripts par `md5sum` — sur un Mac les
-# deux côtés de la comparaison rendaient une chaîne VIDE, donc `"" = ""`, donc « copies identiques ».
-# Un vert par construction sur le garde qui surveille la dérive entre `domaines/` et les dépôts de travail.
-#
-# L'ALGORITHME IMPORTE PEU, LA CONSTANCE OUI : dans une même exécution le premier outil disponible
+# claudeos_hash_file — empreinte d'un fichier, sur la sortie standard, sans le nom.
+# `md5sum` est GNU ; macOS livre `md5` et `shasum`. Sans repli, deux empreintes vides se
+# compareraient égales : « copies identiques » par construction.
+# L'algorithme importe peu, la constance oui : dans une même exécution le premier outil disponible
 # gagne partout, donc les empreintes restent comparables entre elles. On ne les conserve jamais.
 claudeos_hash_file() {
     [ -f "${1:-}" ] || return 1
@@ -97,18 +83,15 @@ claudeos_hash_file() {
 }
 
 # claudeos_lock CONTEXTE : verrou exclusif non-bloquant contre l'exécution
-# concurrente (deux onglets qui clôturent en même temps sur un poste). Le hook SessionEnd,
-# second scénario d'origine, est retiré le 2026-08-22 ; le premier suffit à garder le verrou.
+# concurrente (deux onglets qui clôturent en même temps sur un poste).
 # fd 9 relâché à la mort du process → pas de verrou zombie. Sans flock ou si le
 # verrou ne peut être créé, dégrade en no-op bruyant plutôt que de bloquer.
 claudeos_lock() {
     local ctx="$1" lockfile="$HOME/.claude/.claudeos.lock" _flock=""
-    # REPLI HOMEBREW, posé le 2026-09-22. `flock` n'existe pas dans macOS ; il vient de
-    # `util-linux`, que Homebrew installe KEG-ONLY — donc hors du PATH, et `command -v` ne le
-    # voyait pas même une fois le paquet posé. Ne PAS corriger en mettant `util-linux` dans le
-    # PATH : il livre aussi `kill`, `nice`, `more`, qui masqueraient ceux du système ; c'est la
-    # raison même du keg-only. Les chemins ci-dessous sont des CANDIDATS testés exécutables,
-    # jamais des promesses : Apple Silicon puis Intel. Sans aucun, le no-op bruyant d'origine.
+    # `flock` n'existe pas dans macOS ; il vient de `util-linux`, que Homebrew installe KEG-ONLY,
+    # hors du PATH. Ne PAS mettre `util-linux` dans le PATH : il livre aussi `kill`, `nice`,
+    # `more`, qui masqueraient ceux du système. Les chemins ci-dessous sont des candidats testés
+    # exécutables : Apple Silicon puis Intel. Sans aucun, le no-op bruyant.
     _flock=$(command -v flock 2>/dev/null) || _flock=""
     if [ -z "$_flock" ]; then
         for _c in /opt/homebrew/opt/util-linux/bin/flock /usr/local/opt/util-linux/bin/flock; do
@@ -130,16 +113,14 @@ claudeos_lock() {
     return 0
 }
 
-# --- Motifs de détection de secret — SOURCE UNIQUE du moteur vivant.
-# Un seul consommateur désormais : le hook `pre-commit-alarmes.sh`, au goulot du
-# commit des deux dépôts. Deux copies à deux âges divergent, et c'est alors le plus
-# silencieux des deux qui devient muet sans que rien ne le dise.
+# --- Motifs de détection de secret — SOURCE UNIQUE du moteur.
+# Deux copies à deux âges divergent, et c'est alors la plus silencieuse qui devient muette sans
+# que rien ne le dise.
 #
 # FORMES — préfixes imposés par les éditeurs (AWS, GitHub, GitLab, Google, Slack, Anthropic, clé PEM).
 # Tous ont une casse EXACTE, donc à comparer SANS l'option d'insensibilité : comparer sans la
 # casse ne rattrape aucun secret réel et fait sonner n'importe quel bloc base64 (sur quelques
-# centaines de kilo-octets, 'akia' suivi de seize caractères alphanumériques sort par hasard —
-# ce qui a bloqué la sauvegarde du 2026-07-27 sur des images intégrées).
+# centaines de kilo-octets, 'akia' suivi de seize caractères alphanumériques sort par hasard).
 CLAUDEOS_SECRET_RE_FORMES='(-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,}|glpat-[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{35}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-ant-[A-Za-z0-9_-]{20,})'
 # MOTS — un mot-clé suivi d'une valeur. Ici la casse varie selon qui écrit le fichier, donc
 # l'insensibilité est utile et se garde.
@@ -147,11 +128,32 @@ CLAUDEOS_SECRET_RE_MOTS='(api[_-]?key|secret|password|passwd|token)[^[:alnum:]]{
 # NOMS — le nom du fichier annonce un secret, même si aucune ligne ne matche les deux
 # précédents : une clé nue, seule dans son fichier, n'a ni mot-clé ni forme connue.
 CLAUDEOS_SECRET_NAME_RE='(secret|passw(or)?d|credential|api[._-]?key|[._-]token)'
-# DONNÉES TEXTE — un export ou un journal partirait sans un mot. Remonté ici du hook le 2026-08-24 :
-# la clôture pose désormais la MÊME question avant de committer, pour mettre ces fichiers de
-# côté au lieu de laisser l'alarme bloquer la sauvegarde. Deux lecteurs, donc un seul motif.
-# Pas de liste blanche : elle serait muette, et c'est ce qui a fait entrer un binaire en 2026-08.
+# DONNÉES TEXTE — un export ou un journal partirait sans un mot. Lues par le hook ET par la
+# clôture, qui pose la même question avant de committer pour mettre ces fichiers de côté au lieu
+# de laisser l'alarme bloquer la sauvegarde. Deux lecteurs, donc un seul motif. Pas de liste
+# blanche : elle serait muette.
 CLAUDEOS_DATA_RE='\.(csv|tsv|txt|json|jsonl|xml|eml|msg)$'
+# EXEMPTIONS de l'alarme donnée, mêmes deux lecteurs : un fichier que le crochet exempte mais que la
+# clôture met de côté sortirait du commit EN SILENCE. Toutes ANCRÉES SUR LE CHEMIN, jamais sur
+# l'extension : une alarme forcée par routine apprend à ignorer sa catégorie entière. Les contrôles
+# de nom et de contenu de secret balaient toujours les fichiers exemptés.
+# Tout chemin qui traverse un dossier `extracted/`.
+CLAUDEOS_DATA_EXEMPT_RE='/extracted/'
+# Journal d'événements : un `.jsonl` neuf naît chaque mois. `journal/AAAA-MM.jsonl` seulement ; un
+# `.jsonl` ailleurs, ou nommé autrement dans `journal/`, reste refusé.
+CLAUDEOS_DATA_EXEMPT_RE+='|(^|/)journal/[0-9]{4}-[0-9]{2}\.jsonl$'
+# Configuration du harnais, pas une donnée client ; le contrôle 17 du crochet refuse un JSON invalide.
+# PIÈGE, les DEUX formes que `git` rend : `settings.json` à la racine (le dépôt `~/.claude` a pour
+# racine `.claude`) et `.claude/settings.json` à toute profondeur (dépôts clients). Ne garder que la
+# seconde raterait le dépôt système ; un `settings.json` en sous-dossier quelconque reste refusé.
+# `settings.local.json` N'EST PAS exempté : permissions locales d'un poste, rien à faire en zone partagée.
+CLAUDEOS_DATA_EXEMPT_RE+='|(^settings\.json$|(^|/)\.claude/settings\.json$)'
+# EXEMPTION DU DÉPÔT SYSTÈME SEUL, mêmes deux lecteurs, à appliquer quand le dépôt est `~/.claude` :
+# les `.json` livrés par le template sous `gabarits/` et `installateur/` (fragment de réglages,
+# réglages de la session d'installation, astuces), sans aucune donnée, à un seul niveau, et les trois
+# `.json` de déclaration d'un mod sous `mods/<nom>/`. Hors du
+# dépôt système, un `gabarits/x.json` est une donnée comme une autre et reste refusé.
+CLAUDEOS_DATA_EXEMPT_SYSTEME_RE='^(gabarits|installateur)/[^/]+\.json$|^mods/[^/]+/(\.claude-plugin/plugin|hooks/hooks|tsconfig)\.json$'
 
 # --- Régimes morts et chemins de poste — SOURCE UNIQUE des contrôles 15 et 16 du crochet ------
 # CE FICHIER EST EXCLU DU PÉRIMÈTRE des deux contrôles (`CLAUDEOS_TEXTES_HORS_GARDE_RE`, plus
@@ -179,7 +181,7 @@ CLAUDEOS_PROVENANCE_DATEE_RE='20[0-9]{2}-[0-9]{2}(-[0-9]{2})?|[0-3][0-9]/[01][0-
 #   · Le premier caractère du compte est alphanumérique : les FORMES ANONYMISÉES `/Users/<x>/`,
 #     `/Users/…/`, `/Users/.../` passent — ce sont elles qu'on veut lire dans une fiche.
 #   · Le crochet DÉSÉCHAPPE `\/` → `/` avant de comparer : un outil qui réécrit `settings.json`
-#     avec les barres échappées ferait sinon passer ses chemins.
+#     peut échapper les barres, et le motif nu n'y verrait rien.
 CLAUDEOS_CHEMIN_POSTE_RE='/Users/[A-Za-z0-9_-][A-Za-z0-9._-]*/|/home/[a-z_][a-z0-9_-]*/|/mnt/(c|mac)/'
 # HORS PÉRIMÈTRE des deux contrôles, par le CHEMIN relatif à la racine du dépôt : les archives
 # (gelées par en-tête, mais nommées ici aussi — un gel manquant ne doit pas faire crier sur du
@@ -243,7 +245,93 @@ claudeos_repos() {
     done < <(claudeos_ws_roots)
     # `return 0` explicite : sans lui la fonction hérite du code du dernier test, donc rc=1 dès que
     # le dernier dossier examiné n'est pas un dépôt, et un appelant en `claudeos_repos || …`
-    # conclurait à l'échec sur une sortie parfaitement correcte.
+    # conclurait à l'échec sur une sortie correcte.
+    return 0
+}
+
+# --- Sessions ouvertes — SOURCE UNIQUE du bilan, de la clôture et de `claudeos-session.sh --list` ---
+# Une session tmux par ligne, préfixée `tmux   `. $1 : session à taire (celle qui pose la question) ;
+# $2 : format tmux (`-F`), sinon la ligne de `tmux ls`. Sans tmux, rien, rc 0.
+claudeos_sessions() {
+    command -v tmux >/dev/null 2>&1 || return 0
+    if [ -n "${2:-}" ]; then tmux list-sessions -F "$2" 2>/dev/null; else tmux list-sessions 2>/dev/null; fi \
+        | awk -v moi="${1:-}" '$0 != moi {print "tmux   " $0}'
+    return 0
+}
+
+# --- Poste : le bloc de titre de `~/.zshrc` — SOURCE UNIQUE de ce qui est dû, que pose
+# `install-poste.sh` et que tout autre lecteur doit lire ici. FACULTATIF : sa source est
+# `reglages/zshrc-claudeos.zsh`, à l'installateur ; sans elle, ou sans bloc dedans, rien n'est dû. Le bloc va de la ligne
+# `# >>> ClaudeOS — titre de terminal` à `# <<< ClaudeOS — titre de terminal`, marqueurs compris ;
+# le reste de ce fichier ne part pas. Une ligne par écart :
+#   zsh-titre   bloc absent de `~/.zshrc`, ou différent de celui de `reglages/zshrc-claudeos.zsh`
+CLAUDEOS_ZSHRC_SOUCHE="$REG/zshrc-claudeos.zsh"
+
+# claudeos_zshrc_bloc <nom> [fichier] : le bloc ClaudeOS <nom>, marqueurs compris, de la souche ou du fichier.
+claudeos_zshrc_bloc() { sed -n "/^# >>> ClaudeOS — $1/,/^# <<< ClaudeOS — $1/p" "${2:-$CLAUDEOS_ZSHRC_SOUCHE}" 2>/dev/null; }
+
+claudeos_poste_ecarts() {
+    local bloc
+    [ -f "$CLAUDEOS_ZSHRC_SOUCHE" ] || return 0
+    bloc="$(claudeos_zshrc_bloc 'titre de terminal')"
+    [ -n "$bloc" ] || return 0
+    [ "$(claudeos_zshrc_bloc 'titre de terminal' "$HOME/.zshrc")" = "$bloc" ] || echo 'zsh-titre'
+    return 0
+}
+
+# rc 0 si un rebase est interrompu dans le dépôt $1.
+claudeos_rebase_en_cours() { [ -d "$1/.git/rebase-merge" ] || [ -d "$1/.git/rebase-apply" ]; }
+
+# --- Verdict de pull d'un dépôt — SOURCE UNIQUE ---------------------------------
+# Décide pour la préparation de session (`claudeos-session.sh`), explique pour le bilan
+# (`boot-check.sh`) : une seule logique, sinon le bilan dirait un motif que le lanceur n'a pas
+# appliqué. Ne fetch PAS — les refs distantes sont celles de l'appelant. Lit l'état COURANT, ne
+# mute rien.
+# Rend UNE ligne : `AJOUR` · `SANS_AMONT` · `TIRER|propre` · `TIRER|autostash` · `ATTENDRE|<motif>`.
+# Un dépôt modifié se tire par autostash : « dépôt sale jamais tiré » laisserait le dépôt système,
+# presque toujours un peu sale, en retard à chaque lancement. L'autostash n'est sûr que si sa remise
+# ne peut pas entrer en conflit : d'où les refus ci-dessous, chacun sur un cas réel ou certain.
+# $2 optionnel : sessions tmux à NE PAS compter, séparées par une espace (celle qui pose la
+# question sur elle-même).
+claudeos_verdict_pull() {
+    local repo="$1" moi=" ${2:-} " reel s p n ici amont croise
+    git -C "$repo" rev-parse -q --verify '@{u}' >/dev/null 2>&1 || { echo "SANS_AMONT"; return 0; }
+    n=$(git -C "$repo" rev-list --count 'HEAD..@{u}' 2>/dev/null)
+    [ "${n:-0}" -eq 0 ] && { echo "AJOUR"; return 0; }
+    if claudeos_rebase_en_cours "$repo" || [ -f "$repo/.git/MERGE_HEAD" ]; then
+        echo "ATTENDRE|opération git déjà en cours (rebase ou fusion)"; return 0
+    fi
+    # 1. UNE SESSION TMUX TRAVAILLE DANS LE DÉPÔT : un pull rebaserait sous ses pieds.
+    # Chemins comparés RÉSOLUS : `~/.claude` et les dossiers de travail peuvent être des liens.
+    reel=$(cd "$repo" 2>/dev/null && pwd -P)
+    if [ -n "$reel" ] && command -v tmux >/dev/null 2>&1; then
+        while IFS='|' read -r s p; do
+            [ -z "$s" ] && continue
+            case "$moi" in *" $s "*) continue ;; esac
+            p=$(cd "$p" 2>/dev/null && pwd -P)
+            case "$p/" in "$reel"/*) echo "ATTENDRE|session $s en cours dans le dépôt"; return 0 ;; esac
+        done < <(tmux list-panes -a -F '#{session_name}|#{pane_current_path}' 2>/dev/null)
+    fi
+    ici=$(git -C "$repo" diff --name-only --no-renames HEAD 2>/dev/null)
+    [ -z "$ici" ] && [ -z "$(git -C "$repo" ls-files --others --exclude-standard 2>/dev/null)" ] \
+        && [ "$(git -C "$repo" rev-list --count '@{u}..HEAD' 2>/dev/null)" = "0" ] \
+        && { echo "TIRER|propre"; return 0; }
+    amont=$(git -C "$repo" diff --name-only --no-renames 'HEAD...@{u}' 2>/dev/null)
+    # 2. MODIFIÉ ICI ET CHANGÉ EN AMONT — la remise du stash entrerait en conflit.
+    croise=$(comm -12 <(printf '%s\n' "$ici" | sort -u) <(printf '%s\n' "$amont" | sort -u) | grep -v '^$' | head -3 | paste -sd ',' -)
+    [ -n "$croise" ] && { echo "ATTENDRE|modifié ici ET en amont : ${croise}"; return 0; }
+    # 3. NON SUIVI ICI, AJOUTÉ EN AMONT — l'autostash ne range pas les non-suivis, git refuserait
+    # de les écraser. Cas certain : `journal/<mois>.jsonl` créé le 1er du mois sur deux postes.
+    croise=$(comm -12 <(git -C "$repo" ls-files --others --exclude-standard 2>/dev/null | sort -u) \
+        <(git -C "$repo" diff --name-only --no-renames --diff-filter=A 'HEAD...@{u}' 2>/dev/null | sort -u) | head -3 | paste -sd ',' -)
+    [ -n "$croise" ] && { echo "ATTENDRE|non suivi ici, ajouté en amont : ${croise}"; return 0; }
+    # 4. COMMITS LOCAUX EN CONFLIT avec l'amont — fusion d'essai : elle écrit des objets dans la base,
+    # jamais dans une branche, l'index ou la copie de travail.
+    if [ "$(git -C "$repo" rev-list --count '@{u}..HEAD' 2>/dev/null)" != "0" ] \
+        && ! git -C "$repo" merge-tree --write-tree HEAD '@{u}' >/dev/null 2>&1; then
+        echo "ATTENDRE|commits locaux en conflit avec l'amont"; return 0
+    fi
+    if [ -n "$ici" ]; then echo "TIRER|autostash"; else echo "TIRER|propre"; fi
     return 0
 }
 
@@ -253,49 +341,17 @@ claudeos_repos() {
 . "$SELF/lib_regime.sh"
 
 # --- Plafonds de taille et cliquet de croissance — SOURCE UNIQUE ---------------
-# Posés le 2026-09-07.
-# Lus par `hooks/pre-commit-alarmes.sh`, contrôles 8, 9 et 10. Un seul endroit :
-# `DESIGN.md` § « Plafonds » renvoie ICI et ne porte aucun chiffre, et l'en-tête d'un
-# fichier borné porte un renvoi, jamais une valeur — deux copies à deux âges se
-# contredisent, et c'est arrivé (un plafond du règlement affirmé par la fiche d'audit
-# alors que le règlement l'avait abandonné).
-#
-# UNITÉ : caractères (comptés par `python3`, plus par `wc -m` depuis le 2026-09-22), pas octets — les accents comptent double en UTF-8 et
-# un plafond en octets punirait le français.
+# Lus par `hooks/pre-commit-alarmes.sh`, contrôles 8 et 9. Un seul endroit : l'en-tête d'un
+# fichier borné porte un renvoi, jamais une valeur — deux copies à deux âges se contredisent.
+# UNITÉ : caractères (comptés par `python3`), pas octets — les accents comptent double en UTF-8
+# et un plafond en octets punirait le français.
 CLAUDEOS_PLAFOND_MEMORY=8000
-# ETAT.md — POSÉ le 2026-09-09 à la passe de ménage, sur arbitrage de l'utilisateur. Motif :
-# après la bascule de la phase 3, les MEMORY.md et HANDOFF.md du parc sont GELÉS et les `ETAT.md`
-# sont les seuls fichiers d'état vivants — or aucun plafond ne les connaissait. Mesuré ce jour-là :
-# le contrôle du parc ne mesurait plus qu'UN fichier sur 52. La borne du système n'était donc plus
-# gardée par rien, et `~/.claude/ETAT.md` était à 40 032 caractères, lu à chaque démarrage.
-# VALEUR : 25 000, dérivée du parc et non inventée — un `ETAT.md` porte ce que portaient la mémoire
-# (8 000) et la reprise (12 000) du même niveau, plus les décisions en vigueur. Les quatre plus gros
-# au 2026-09-09 : système 40 032, puis trois niveaux de projet à 22 189, 21 978 et 18 374.
-# CE QU'IL FAUT SAVOIR AVANT DE LE VOIR CRIER : un `ETAT.md` est une PROJECTION, il NE S'ALLÈGE PAS
-# à la main — le crochet refuse l'édition (code 23). Il maigrit de deux façons : en SOLDANT des dus
-# et en FERMANT des chantiers, et en écrivant PLUS COURT.
-#
-# DEUX PHRASES DE CE COMMENTAIRE ÉTAIENT FAUSSES, retirées le 2026-09-10 après mesure. Elles sont
-# nommées ici parce qu'elles ont orienté un geste vers la mauvaise cible, et que le savoir seul
-# empêche de les réécrire.
-#   1. « Un dépassement est un signal de dette ouverte. » NON — c'est un signal de VERBOSITÉ. Mesuré
-#      sur les deux fichiers au-dessus : un cinquième à un tiers des articles portait les deux tiers
-#      du poids. Solder des dus ne guérit pas ça, et le geste C4 du plan de correction du 2026-09-10
-#      l'a payé — il a soldé six dus pour 1 885 caractères sur un dépassement de 25 000.
-#      LE GESTE QUI LE REMESURE, jamais un chiffre recopié : parcourir `journal/*.jsonl` du niveau,
-#      ne garder que ce que `projette` retient (decision pose/remplace, du ouvre/remplace, pointeur
-#      ajoute, etat avance non remplacé), et compter les textes au-delà de leur borne.
-#   2. « Lu à chaque démarrage. » NON — `boot-check.sh` n'en extrait que QUATRE lignes d'« État
-#      courant », TRONQUÉES À 120 CARACTÈRES, plus deux lignes de comptes : environ 600 caractères
-#      quelle que soit la taille du fichier. Le coût réel est ailleurs, et il est vrai : le règlement
-#      §3 fait charger le fichier ENTIER à chaque reprise de niveau.
-#      Conséquence que ça révèle : les lignes d'« État courant » les plus longues étaient écrites
-#      pour un lecteur qui en lit 120.
-#
-# LE LEVIER N'EST DONC PAS ICI, il est à l'écriture : `TEXTE_MAX_PROJETE` dans `engine/etat.py`
-# borne par type le texte des quatre opérations projetées, et refuse à l'`add`. Le récit, la méthode
-# et la preuve vont en `--type observation`, qui ne pèse RIEN sur la projection. Ce plafond-ci reste
-# le témoin du RÉSULTAT ; il ne dit pas où couper, et ne doit plus être lu comme s'il le disait.
+# ETAT.md : il porte ce que portaient la mémoire (8 000) et la reprise (12 000) d'un niveau, plus
+# les décisions en vigueur. Un dépassement signale de la VERBOSITÉ plus que de la dette : solder
+# des dus fait peu maigrir. Un `ETAT.md` est une PROJECTION, il ne s'allège pas à la main (code 23
+# du crochet). Le levier est à l'écriture : `TEXTE_MAX_PROJETE` dans `engine/etat.py` borne par
+# type le texte projeté et refuse à l'`add` ; le récit va en `--type observation`, qui ne pèse
+# rien sur la projection. Ce plafond est le témoin du RÉSULTAT, il ne dit pas où couper.
 CLAUDEOS_PLAFOND_ETAT=25000
 
 # Exceptions NOMMÉES : un plafond propre à un fichier, une ligne `<dépôt>/<chemin relatif>=plafond`,
@@ -310,17 +366,11 @@ CLAUDEOS_PLAFOND_EXCEPTIONS=''
 # L'exception nommée gagne ; sinon le défaut selon le nom de fichier. Rien émis, rc=1, si le
 # fichier n'est pas un fichier d'état borné — l'appelant distingue alors « pas borné » de
 # « borné à zéro », que la même sortie vide confondrait.
-# SOURCE UNIQUE, appelée par `hooks/pre-commit-alarmes.sh` (son contrôle 8) ET par
-# `plafonds-parc.sh`. *(Elle citait « le contrôle 29 de weekly-check.sh » : ce contrôle est RETIRÉ
-# depuis le 2026-09-08, seul `29bis` subsiste et il regarde autre chose — corrigé le 2026-09-10.)* Deux implantations du même calcul auraient divergé au premier correctif
-# porté sur une seule — c'est exactement ce qui est arrivé au motif de secret avant sa remontée ici.
-# CHEMINS HORS RÉGIME — ce ne sont pas des fichiers d'état de niveau, malgré leur nom.
-# `.claude/memory/MEMORY.md` est l'INDEX de la mémoire automatique, écrit et lu par l'outil, qui lui
-# impose déjà ses propres bornes (200 lignes ou 25 Ko, documentation de l'éditeur, vérifiée le
-# 2026-09-07). Deux régimes sur un même fichier, c'est deux vérités concurrentes — et le nôtre
-# serait le plus serré, donc celui qui crie pour rien. FAUX POSITIF CONSTATÉ le 2026-09-07 sur
-# le commit `ed7b65d`, corrigé dans la même séance : un signal qu'on sait devoir ignorer apprend
-# à ignorer la catégorie entière, y compris les vrais.
+# SOURCE UNIQUE, appelée par `hooks/pre-commit-alarmes.sh` (contrôle 8), `plafonds-parc.sh` et
+# `boot-check.sh` : deux implantations du même calcul divergeraient au premier correctif.
+# HORS RÉGIME : `.claude/memory/MEMORY.md` est l'INDEX de la mémoire automatique, que l'outil
+# borne lui-même (200 lignes ou 25 Ko, documentation de l'éditeur). Un second régime, plus
+# serré, crierait pour rien — et un signal qu'on sait devoir ignorer apprend à ignorer la catégorie.
 CLAUDEOS_PLAFOND_HORS_REGIME='
 .claude/memory/MEMORY.md
 '
@@ -337,39 +387,17 @@ claudeos_plafond_de() {
     esac
 }
 
-# CHEMINS NÉS AU PREMIER BESOIN — copie du template, A6, 2026-10-01. Les compétences livrées les
-# citent, et une installation neuve ne les porte pas encore : le contrôle hebdomadaire 27 les compte à
-# part au lieu de les crier. Trois n'existent jamais dans un régime donné : `RTK.md` sans proxy, les
-# empreintes de clôture en régime GitHub, l'identité git sans git. Un chemin qui finit par `/` vaut pour
-# tout ce qu'il contient. Mesuré sur trois installations d'essai.
+# CHEMINS NÉS AU PREMIER BESOIN. Les compétences livrées les citent, et une installation neuve ne
+# les porte pas encore : le contrôle hebdomadaire 27 les compte à part au lieu de les crier. Trois
+# n'existent jamais dans un régime donné : `RTK.md` sans proxy, les empreintes de clôture en régime
+# GitHub, l'identité git sans git. Un chemin qui finit par `/` vaut pour tout ce qu'il contient.
 CLAUDEOS_CHEMINS_AU_BESOIN='~/.claude.json ~/.claude/audits/ ~/.claude/memory ~/.claude/memory/ ~/.claude/plans/ ~/.claude/TODO.md ~/.claude/domaines/ ~/.claude/secrets-shared/ ~/.claude/reglages/CRENEAUX ~/.claude/RTK.md ~/.claude/.claudeos/empreintes/MANIFESTE.json ~/.claude/reglages/IDENTITE_GIT'
 
-# CLIQUET — trois valeurs figées à leur mesure du 2026-09-07, dépôt système seulement.
-# ON NE REMONTE JAMAIS : pour ajouter, il faut retirer. Motif mesuré : le corpus des
-# compétences est passé de 296 430 à 384 909 octets en quatorze jours (+29 %) APRÈS un
-# chantier de décomplexification déclaré terminé le 2026-08-22. Une cure sans cliquet
-# sur l'état atteint se repaie.
-# Toute baisse se réécrit ici avec sa date ; `git log -p` sur ces lignes montre
-# toute remontée, et le contrôle hebdomadaire la lit.
+# CLIQUETS — dépôt système seulement. On ne remonte jamais : pour ajouter, il faut retirer.
+# Une baisse se réécrit ici ; `git log -p` sur ces lignes montre toute remontée.
 CLAUDEOS_CLIQUET_REGLEMENT=7000        # les fragments de noyau/regles/ retenus par le jeu MAX, octets,
                                        # mesurés à l'atelier (mesure-personnalisation.py taille). Il ne
-                                       # mesure plus le CLAUDE.md, qui est à l'installateur (A6, 2026-10-01).
-# LE CLIQUET SUR LA SOMME DES CORPS EST RETIRÉ LE 2026-09-22, à l'audit, sur arbitrage de
-# l'utilisateur. Il a été mesuré incohérent : il plafonnait 378 244 octets de FICHIERS ENTIERS,
-# frontmatter compris — et non « 377 652 octets de corps », chiffre écrit ici le 2026-09-22 qui ne
-# correspondait à AUCUNE mesure et nommait la mauvaise grandeur, relevé à la passe du soir. Dont
-# 9777 seulement — 2,6 % — sont payés à chaque session. Un corps ne coûte rien tant que sa
-# fiche ne se charge pas, et il s'en charge trois ou quatre par séance. Ce qui est réellement
-# payé à chaque tour est la liste des DESCRIPTIONS, que rien ne plafonnait.
-# SECOND DÉFAUT, et c'est lui qui a emporté la décision : une SOMME globale laisse financer
-# une fiche par le dégraissage d'une AUTRE, sans rapport — mesuré le jour même, quatre règles
-# financées sur deux compétences personnelles. Ça passe le contrôle et ça ne protège
-# rien. La dérive que le sondage d'audit traque est un CORPS QUI GROSSIT : elle se plafonne
-# par fiche, jamais en somme.
-# CE QUI EST ASSUMÉ : la somme totale n'est plus bornée par rien. Le pari « à réfuter si le
-# corpus enfle sans qu'aucune fiche ne dépasse » a été RÉFUTÉ à l'audit du 2026-09-22 au soir
-# (+5 394 octets en 9 h), puis ASSUMÉ par l'utilisateur le même soir : la croissance était
-# décidée, pas une dérive. L'audit suit la TENDANCE, rien ne la borne.
+                                       # mesure pas le CLAUDE.md, qui est à l'installateur.
 CLAUDEOS_CLIQUET_DESCRIPTIONS=8858     # somme des `description:` de skills/*/SKILL.md en file, octets.
                                        # BAISSÉ de 9777 à 8858 le 2026-09-22 au soir, sur arbitrage de
                                        # l'utilisateur : cinq fiches supprimées, cliquet reposé sur l'état
@@ -380,27 +408,52 @@ CLAUDEOS_CLIQUET_INDEX=6794            # memory/MEMORY.md, octets — injecté �
 CLAUDEOS_CLIQUET_FICHE=33522           # plafond PAR FICHE, octets — posé sur la plus grosse au
                                        # 2026-09-22, `os-audit`. Il borne la dérive du corps, celle que
                                        # le sondage de déclenchement cherche. Un cliquet ne remonte jamais.
-CLAUDEOS_CLIQUET_CONTROLES=20          # contrôles émis par engine/weekly-check.sh — BAISSÉ de 21 à 20
-                                       # le 2026-09-22 : contrôle 32 retiré, vert par construction une fois
-                                       # les HANDOFF supprimés (toutes les racines portent ETAT.md). Avant :
-                                       # BAISSÉ de 23 à 21
-                                       # le 2026-09-08 (geste 2.7) : les contrôles 5, 21, 24 et 29 sont
-                                       # retirés, chacun remplacé (décision D-G). Un cliquet ne remonte
-                                       # jamais, et une baisse se réécrit ICI avec sa date.
-CLAUDEOS_CLIQUET_PERSONNALISATION=75   # pourcent, cliquet INVERSE posé le 2026-10-01 sur la mesure
-                                       # de l'A4 : la part des règles des fragments de noyau/regles/
-                                       # retenus par le jeu MAX dont la présence ou la forme dépend
-                                       # d'une réponse, hors les trois interdits du socle. Il ne BAISSE
-                                       # jamais, plancher 50 (d-mesure-perso) ; une montée se réécrit
-                                       # ici, datée. Propriété du template, comme le compte de
-                                       # contrôles. Mesure : python3 engine/mesure-personnalisation.py ratio
+CLAUDEOS_CLIQUET_PERSONNALISATION=75   # pourcent, cliquet INVERSE posé sur la mesure de l'A4 : la
+                                       # part des règles des fragments de noyau/regles/ retenus par le
+                                       # jeu MAX dont la présence ou la forme dépend d'une réponse, hors
+                                       # les trois interdits du socle. Il ne BAISSE jamais, plancher 50
+                                       # (d-mesure-perso) ; une montée se réécrit ici. Propriété du
+                                       # template, comme les budgets en somme ci-dessous.
+                                       # Mesure : python3 engine/mesure-personnalisation.py ratio
+# BUDGETS EN SOMME — le code du moteur et la somme des fiches système, en octets lus à l'index du
+# dépôt système. Une fiche système peut en financer une autre ; les fiches de métier sont hors
+# budget. Propriétés du template, MESURÉES À L'ATELIER sur l'arbre livré de chaque version, qui
+# apporte les siennes : `claudeos_somme`, lancée à la racine de l'arbre livré, avec les motifs
+# ci-dessous. Le crochet AVERTIT quand ils sont dépassés, il ne refuse pas : chez l'installateur, un
+# dépassement vient d'une version gardée à la mise à jour ou d'un correctif local.
+CLAUDEOS_MOTEUR_RE='^(engine/.*[.](sh|py)|[^/]+[.]sh|resources/.*[.](sh|py))$'
+# Hors budget : les bancs d'essai, et la ligne d'état que Claude Code écrit à la racine, code
+# d'amont qui n'est pas du moteur.
+CLAUDEOS_MOTEUR_HORS_RE='(^|/)tests/|(^|/)test_|^statusline-command[.]sh$'
+CLAUDEOS_FICHES_SYSTEME="reprise memoire-et-verite session controles-et-alarmes carte-complete fichiers-et-nommage os-audit demarrage tri-des-fils pousser-son-dossier secrets-detail nouveau-projet nouveau-domaine claudeos-onboarding"
+CLAUDEOS_FICHES_SYSTEME_RE="^skills/(${CLAUDEOS_FICHES_SYSTEME// /|})/.*[.]md\$"
+# Mesurés sur l'arbre livré de la v3.1.0 (moteur 689873 octets, fiches 155856 octets), plus 1 %, arrondi au
+# millier supérieur : la marge d'une retouche locale gardée (`regime.py garde`, un correctif WSL).
+CLAUDEOS_CLIQUET_MOTEUR=697000          # octets
+CLAUDEOS_CLIQUET_FICHES_SYSTEME=158000  # octets
+CLAUDEOS_INCIDENT_SOLDE_MAX=1024       # octets ajoutés au moteur au-delà desquels « incident: » compte comme chantier
+
+# Somme en octets des fichiers suivis dont le chemin répond à RE et pas à EX : à l'index, ou
+# dans l'arbre nommé en troisième argument. Se lance depuis la racine du dépôt.
+claudeos_somme() {
+    local re="$1" ex="$2" arbre="${3:-}"
+    if [ -n "$arbre" ]; then
+        git ls-tree -r -l "$arbre" | awk -F'\t' -v re="$re" -v ex="$ex" \
+            '$2 ~ re && (ex=="" || $2 !~ ex) {split($1,a," "); s+=a[4]} END {print s+0}'
+    else
+        git ls-files -s | awk -F'\t' -v re="$re" -v ex="$ex" \
+            '$2 ~ re && (ex=="" || $2 !~ ex) {split($1,a," "); print a[2]}' \
+            | git cat-file --batch-check='%(objectsize)' | awk '{s+=$1} END {print s+0}'
+    fi
+}
+
 # CLIQUETS DU POSTE — descriptions, index de mémoire et fiche : les valeurs ci-dessus sont celles du
-# template, et elles sont tes BUDGETS DE DÉPART. L'installation n'en remesure aucun (A6, 2026-10-01) :
-# mesurés sur un poste neuf, les descriptions n'auraient laissé aucune place à ta première compétence,
-# que rien de tien n'aurait pu financer, et l'index, encore absent, se serait figé à rien.
+# template, et elles sont tes BUDGETS DE DÉPART. L'installation n'en remesure aucun : mesurés sur
+# un poste neuf, les descriptions n'auraient laissé aucune place à ta première compétence, que rien
+# de tien n'aurait pu financer, et l'index, encore absent, se serait figé à rien.
 # `reglages/CLIQUETS`, une ligne `CLE=valeur`, fixe ton propre budget et l'emporte alors. La leçon du
 # cliquet tient — pour ajouter, retirer d'abord —, mais le budget est le tien : il se baisse après un
-# ménage, et se relève aussi, si tu le décides. Le règlement, le compte de contrôles et la
+# ménage, et se relève aussi, si tu le décides. Le règlement, les budgets en somme et la
 # personnalisation sont des propriétés du template et restent ici.
 if [ -f "$REG/CLIQUETS" ]; then
     while IFS='=' read -r _cos_k _cos_v; do
@@ -411,6 +464,3 @@ if [ -f "$REG/CLIQUETS" ]; then
     done < "$REG/CLIQUETS"
     unset _cos_k _cos_v
 fi
-# ⚠ Le plan du 2026-09-05 annonçait 30 contrôles. FAUX, mesuré : le motif
-# `grep -c '^echo "\[selftest\] [0-9]'` rend 27, et les numéros émis vont de 2 à 48 avec
-# des bis/ter et des trous — le compte n'est pas le plus grand numéro.

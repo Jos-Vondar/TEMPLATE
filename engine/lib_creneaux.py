@@ -13,8 +13,6 @@ Exemple : `<DÉPÔT> ven` — la clé est le nom du DÉPÔT sous `~/`, pas un do
 """
 
 DAYS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim']
-DAYNAME = {'lun': 'lundi', 'mar': 'mardi', 'mer': 'mercredi', 'jeu': 'jeudi',
-           'ven': 'vendredi', 'sam': 'samedi', 'dim': 'dimanche'}
 
 
 def parse_creneaux(chemin):

@@ -65,6 +65,10 @@ description: Monter un domaine d'activité entier — son dépôt git en régime
 
    Contrôle : `test -f "$D/.claude/rules/<METIER>.md"` suit le lien jusqu'à sa cible ; en
    `par-domaine`, `git -C "$D" ls-files -s .claude/rules` rend en plus le mode `120000`.
+
+   **Quand les projets du domaine ne relèvent pas tous de ce savoir-faire**, poser le lien dans le
+   seul projet concerné, `$D/<Projet>/.claude/rules/`, avec une remontée de plus : posé à la racine
+   du domaine, il se charge dans toutes ses sessions.
 10. **Poser les gardes qui ne voyagent pas** — `bash ~/.claude/engine/install-poste.sh`, idempotent,
     qui boucle sur `claudeos_repos`. En `par-domaine`, les hooks vivent sous `.git/`, que git ne suit
     pas : **un shim absent ne fait pas échouer le commit, il le laisse passer muet.** En `unique` ou
@@ -118,7 +122,7 @@ ailleurs.
    `_IGNORE/` n'existe qu'en local, donc **faire confirmer** chacun de ses fichiers.
 2. **Sauver avant de supprimer, en nommant la destination.** Outil → `~/.claude/resources/` ;
    savoir-faire → `~/.claude/domaines/<METIER>/` ; conception → les plans et specs du système
-   (compétence `fichiers-et-nommage`). Si c'est confidentiel, l'anonymiser avant de le remonter —
+   (`carte-complete`, « Plans et specs »). Si c'est confidentiel, l'anonymiser avant de le remonter —
    sinon **le dire** au lieu de le supposer sauvé.
 3. **Le dernier exemplaire avant de couper.**
    - `par-domaine` : `git clone --mirror ~/<NOM> ~/<NOM>-miroir.git` — c'est le dernier exemplaire de

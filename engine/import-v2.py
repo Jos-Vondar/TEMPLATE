@@ -78,7 +78,7 @@ FUSION = (('Identité', ('Identité',)),
           ('Périmètre du caractère', ('Périmètre du caractère',)),
           ('Humour', ('Humour',)),
           ('Forme de la voix', ('Forme de la voix',)))
-# La mémoire V2 : vivante, elle est copiée ; chronique, elle est gelée ; générée, la V3 la refait.
+# La mémoire V2 : vivante, elle est copiée ; chronique, elle est gelée ; générée, elle ne se reprend pas.
 MEMOIRE_GELEE = ('SESSION_JOURNAL.md', 'ORIGINES_DES_REGLES.md', 'INDEX.md', 'LEARNING_PROPOSALS.md')
 MEMOIRE_GENEREE = ('OPEN_THREADS.md', 'PORTFOLIO.md')
 # Où le squelette V2 posait chaque chose (`engine/manifest.sh` de chaque étiquette, la carte).

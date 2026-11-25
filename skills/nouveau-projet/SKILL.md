@@ -5,18 +5,12 @@ description: Monter un projet neuf DANS un domaine existant et lui ouvrir sa ses
 
 # Monter un projet neuf et lui ouvrir sa session
 
-> Fiche situationnelle. Se charge sur déclencheur. Elle existe parce que la compétence `nouveau-domaine` ne
-> couvre que le domaine entier : le cas courant — un projet de plus dans un domaine
-> déjà en place — n'avait aucune procédure, et se faisait donc de mémoire, différemment
-> chaque fois.
+> Fiche situationnelle. Se charge sur déclencheur.
 
 ## Ce qui rend ce montage particulier
 
 **Un projet neuf naît au régime à ÉVÉNEMENTS : `ETAT.md` projeté depuis `journal/`, jamais de
 `MEMORY.md`.** Le journal est la seule source de l'état du niveau, `ETAT.md` en est la projection.
-
-**C'est `ETAT.md` qui fait exister la session.** `claudeos-session.sh` avertit quand il manque
-(`ensure_session`), et ouvre quand même : l'oubli ampute le niveau sans rien casser.
 
 ## Selon le régime git
 

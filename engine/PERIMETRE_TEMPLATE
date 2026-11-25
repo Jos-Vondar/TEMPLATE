@@ -36,6 +36,9 @@ skills/rtk-depannage/* conditionnel
 skills/pousser-son-dossier/* conditionnel
 skills/* nature
 
+# Le mod du démarrage : lit BILAN_DEMARRAGE à l'exécution, identique chez chacun.
+mods/* nature
+
 # Le moteur : lit les réponses à l'appel, ne les porte jamais.
 engine/* nature
 

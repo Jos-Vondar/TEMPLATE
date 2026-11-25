@@ -16,6 +16,9 @@ QUE CE QUE LE TEMPLATE POSSÈDE, et tout le reste ressort tel qu'il est entré :
   ClaudeOS vit sous `~/.claude/memory`, et déplacer celle de quelqu'un se décide avec lui ;
 - `spinnerTipsOverride`, posé s'il manque, mis au fragment s'il porte déjà le `tipsFile` de ClaudeOS,
   laissé tel quel s'il est à toi — dit, sans défaut.
+- `env.CLAUDE_CODE_PLUGIN_DIRS`, qui charge le mod du démarrage livré sous `mods/` : posée si elle
+  manque, complétée si elle charge déjà d'autres dossiers (séparés par `:`), jamais retirée ; les
+  autres variables de `env` restent telles quelles.
 Les `skillOverrides` ne sont pas d'ici : `appliquer-reponses.py` les écrit depuis les réponses.
 
 Usage :
@@ -38,6 +41,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import lib_reponses as L  # noqa: E402
 
 FRAGMENT = os.path.join(L.RACINE, 'gabarits', 'settings.fragment.json')
+# Variables de `env` qui portent une liste de dossiers séparés par `:` : on y ajoute, on n'écrase pas.
+LISTES_ENV = ('CLAUDE_CODE_PLUGIN_DIRS',)
 MOTEUR = '/.claude/engine/'
 RTK = 'rtk hook claude'
 
@@ -154,6 +159,18 @@ def fusion(objet, fragment, proxy):
         else:
             remarques.append('spinnerTipsOverride est déjà réglé, et pas par ClaudeOS : laissé tel quel, '
                              'les astuces de ClaudeOS ne défileront pas')
+    # 5. Les mods livrés : un dossier de plus dans la liste, jamais un remplacement.
+    for cle, val in (fragment.get('env') or {}).items():
+        env = neuf.setdefault('env', {})
+        if not isinstance(env, dict):
+            raise ValueError('settings.json : env doit être un objet')
+        actuel = env.get(cle)
+        if not actuel:
+            env[cle] = val
+        elif cle in LISTES_ENV and val not in actuel.split(':'):
+            env[cle] = actuel + ':' + val
+        elif cle not in LISTES_ENV and actuel != val:
+            remarques.append('env.%s vaut %r, laissé tel quel' % (cle, actuel))
     return neuf, remarques
 
 
@@ -184,6 +201,10 @@ def ecarts(objet, fragment, proxy):
     voulu = fragment.get('autoMemoryDirectory')
     if voulu and not meme_dossier(objet.get('autoMemoryDirectory'), voulu):
         d.append('autoMemoryDirectory vaut %r, ClaudeOS attend %r' % (objet.get('autoMemoryDirectory'), voulu))
+    env = objet.get('env') if isinstance(objet.get('env'), dict) else {}
+    for cle, val in (fragment.get('env') or {}).items():
+        if val not in str(env.get(cle) or '').split(':'):
+            d.append('env.%s ne charge pas %s : le bilan d\'ouverture ne partira pas de lui-même' % (cle, val))
     return d
 
 

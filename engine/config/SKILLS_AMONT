@@ -18,5 +18,5 @@
 # Changer un COMMIT est un report : recomposer en essai (`skills-amont.sh --essai`), puis relire le
 # corps neuf sous la surcouche qu'il reçoit.
 writing-for-agents  mattpocock/skills  f054defc3f694558dbd1f418cd9046057594283b  skills/productivity/writing-for-agents/SKILL.md  SKILL-MECHANICS.md  LICENSE
-grilling            mattpocock/skills  85f83d3fde1d3a90d5c9a657f6998c79a6c37308  skills/productivity/grilling/SKILL.md  -  LICENSE
+grilling            mattpocock/skills  7739eaed7f8f3915437a8def198a6d0d7206dbc7  skills/productivity/grilling/SKILL.md  -  LICENSE
 domain-modeling     mattpocock/skills  54bc6b604075c18293d38e9e294a2c96f365f104  skills/engineering/domain-modeling/SKILL.md  ADR-FORMAT.md,CONTEXT-FORMAT.md  LICENSE

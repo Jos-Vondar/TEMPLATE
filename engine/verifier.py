@@ -35,7 +35,6 @@ import json
 import os
 import platform
 import re
-import sqlite3
 import subprocess
 import sys
 from datetime import date
@@ -51,8 +50,10 @@ MARQUES = ('*(réglage : à remplir)*', '*(à remplir)*')
 # Claude Code : 2.1.247 pour les astuces en objets et `tipsFile` ; 2.1.281 pour qu'un agent au corps
 # VIDE garde le prompt système par défaut (doc `sub-agents`, « An empty prompt requires Claude Code
 # v2.1.281 or later », relue le 2026-10-01). Le lanceur livré a un corps vide : la borne est la plus
-# haute des deux. Sous elle, la session d'installation tournerait sur un prompt système vide.
-CLAUDE_MIN = (2, 1, 281)
+# haute des deux. Sous elle, la session d'installation tournerait sur un prompt système vide. Puis
+# 2.1.287 : les mods sont actifs par défaut à partir d'elle (doc `mods`, « In the terminal, use Claude
+# Code v2.1.287 or later »), et le bilan d'ouverture part du mod `mods/demarrage-auto`.
+CLAUDE_MIN = (2, 1, 287)
 PYTHON_MIN = (3, 8)
 CONFLIT_RE = re.compile(r'^(<<<<<<<|>>>>>>>) ', re.M)
 # Ce que Claude Code range lui-même dans ~/.claude et qui ne se suit jamais (§ 1.1). Le `.gitignore`
@@ -378,13 +379,6 @@ def cmd_prerequis(racine, a):
         r.ok('python3 %d.%d' % sys.version_info[:2])
     else:
         r.ko('python3 %d.%d, il faut %d.%d au moins' % (sys.version_info[:2] + PYTHON_MIN))
-    try:
-        c = sqlite3.connect(':memory:')
-        c.execute('create virtual table t using fts5(x)')
-        c.close()
-        r.ok('python3 ouvre une table FTS5 : l\'index de recherche se bâtira')
-    except sqlite3.Error as e:
-        r.ko('python3 n\'ouvre pas de table FTS5 (%s) : l\'index de recherche ne se bâtira pas' % e)
     v, err = version_claude()
     if v is None:
         r.ko(err)
