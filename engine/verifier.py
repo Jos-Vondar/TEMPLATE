@@ -253,8 +253,7 @@ def message_inachevee(motifs):
     # compris — l'entretien rejoué n'y revient jamais (audit de la v3.0.0). Seule une marque restée
     # dans le persona relève de l'entretien.
     if 'réponses' in motifs:
-        return (tete + ' Relance l\'agent d\'installation : `cd ~/.claude && claude --settings '
-                'installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur`. '
+        return (tete + ' Relance l\'agent d\'installation : `bash ~/.claude/lancer.sh`. '
                 'Il reprend là où elle s\'est arrêtée. Tant que cette ligne s\'affiche, ce poste tourne avec '
                 'un règlement de gabarit, pas le tien.')
     if 'marques' in motifs:

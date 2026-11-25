@@ -465,11 +465,13 @@ def projection_vivante(evs):
            and e.get("ref") not in dus_sortis]
     dus = dernier_par_ref(dus)
 
+    # LA DERNIÈRE VERSION D'ABORD, LE CHANTIER FERMÉ ENSUITE : filtré avant, le chantier fermé
+    # écarte la version neuve et une version antérieure rangée ailleurs ressort, périmée, sans un mot.
     pointeurs = [e for e in evs
                  if e["type"] == "pointeur" and e.get("op") == "ajoute"
-                 and e.get("ref") not in retires
-                 and e.get("chantier") not in chantiers_fermes]
-    pointeurs = dernier_par_ref(pointeurs)
+                 and e.get("ref") not in retires]
+    pointeurs = [e for e in dernier_par_ref(pointeurs)
+                 if e.get("chantier") not in chantiers_fermes]
 
     courant = {}
     for e in evs:

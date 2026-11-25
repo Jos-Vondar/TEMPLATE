@@ -9,12 +9,40 @@ Procédure de l'agent, mode `v3`, quand la personne veut la version suivante (`L
 
 **Fin** : `python3 ~/.claude/engine/verifier.py mise-a-jour --version <V>` rend `0`.
 
+## Ce que la mise à jour s'interdit
+
+- **Rien hors du périmètre livré n'est modifié ni supprimé**, hors des écritures de plomberie que
+  cette procédure nomme, chacune bornée à sa part :
+  - le bloc d'imports de `CLAUDE.md`, entre ses deux marqueurs ;
+  - dans `settings.json`, les crochets du moteur, que `fusionner-reglages.py` remet à leur forme de
+    la version, ce qu'il ajoute, et les trois entrées de `skillOverrides` que les réponses
+    gouvernent ; ses crochets à elle et le reste restent ;
+  - dans `reglages/REPONSES`, la ligne `PROXY` et une clé neuve ;
+  - les journaux, auxquels s'ajoutent des événements, et les `ETAT.md`, qui en sont la projection ;
+  - les compétences empruntées, que `skills-amont.sh` recompose : l'ancienne composition se range
+    sous `cache/compositions-remplacees/` ;
+  - le bloc de titre de `~/.zshrc`, ajouté en fin de fichier, ou remplacé avec l'ancien fichier
+    gardé à côté ;
+  - les raccourcis `_ign` qu'`install-poste.sh` a posés, retirés quand leur cible n'existe plus.
+- **Un fichier livré qu'elle a modifié n'est jamais écrasé ni supprimé sans son accord** : il sort
+  en conflit en GitHub, « à trancher » sans git, et tu le tranches avec elle.
+- **Seul un fichier livré intact, que la version retire, disparaît.**
+- **Tu ne supprimes rien toi-même.** `installateur/settings.installation.json` te refuse `rm`,
+  `git rm`, `git clean`, `git reset --hard`, `git checkout --` et `git restore`. Une suppression
+  qu'elle veut, celle d'une amorce par exemple, se fait de sa main, sur la commande que tu lui donnes.
+
 ## 1. Avant
 
 - **Une clôture faite.**
   - En GitHub, `git -C ~/.claude status --porcelain` est vide ; sinon, clôture d'abord.
   - Sans git, la dernière séance s'est close par « on arrête ».
 - **Toutes les autres sessions fermées.**
+- **Ses compétences empruntées, telles que composées** :
+  `bash ~/.claude/engine/skills-amont.sh --verifier`. Une composition « retouchée sur place » sera
+  remplacée au § 3 : montre-lui la retouche, et dis-lui que l'ancienne composition sera gardée sous
+  `~/.claude/cache/compositions-remplacees/`. Pour qu'une retouche survive aux versions, elle va
+  dans `gabarits/skills/<nom>/SURCOUCHE.md`, que la mise à jour traite comme tout fichier livré
+  qu'elle a modifié. Continue sur son accord.
 - **La version visée.**
   - **GitHub** : `git -C ~/.claude fetch upstream --tags`, puis
     `git -C ~/.claude tag -l 'v*' --sort=-v:refname`. La plus haute, sauf si elle en nomme une autre.
@@ -146,5 +174,6 @@ remplace. Lancé depuis `~/.claude`, il refuse.
 6. **Fin** : `python3 ~/.claude/engine/verifier.py mise-a-jour --version <V>` rend `0`. Puis la
    clôture sauvegarde la mise à jour (`INSTALLER.md`, I8, geste 1). En GitHub, demande avant de
    pousser.
-7. **Sans git, l'amorce** : propose de supprimer `~/claudeos-amorce`, et l'ancienne si tu l'as
-   renommée. Ne le fais qu'après confirmation. L'état livré porte désormais la copie de la version.
+7. **Sans git, l'amorce** : l'état livré porte désormais la copie de la version, et l'amorce ne
+   sert plus. Donne-lui la commande qui la supprime, `rm -rf ~/claudeos-amorce`, plus l'ancienne si
+   tu l'as renommée : elle la lance elle-même, si elle le veut.

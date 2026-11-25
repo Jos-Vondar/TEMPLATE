@@ -66,7 +66,7 @@ else
 # L'URL de chaque dépôt est celle que git connaît : aucun fichier ne la recopie. Poser le dépôt
 # système la première fois est le geste de l'agent d'installation, pas de ce script.
 if [ ! -d "$SYS/.git" ]; then
-    warn "~/.claude n'est pas un dépôt git — c'est l'agent d'installation qui le pose : claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur"
+    warn "~/.claude n'est pas un dépôt git — c'est l'agent d'installation qui le pose : bash ~/claudeos-amorce/lancer.sh"
 fi
 for _d in "${_DEPOTS[@]}"; do
     if [ -d "$_d/.git" ] && [ -z "$(git -C "$_d" remote 2>/dev/null)" ]; then

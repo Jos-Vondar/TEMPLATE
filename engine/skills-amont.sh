@@ -221,6 +221,26 @@ prepare() {
 }
 
 # compose NOM → 0 composé ; 4 non récupéré ; 1 la place est prise par un dossier sans marque.
+# garde_ancienne NOM ANCIENNE [NEUVE] — range ANCIENNE sous cache/compositions-remplacees/NOM-<date>/ :
+# une recomposition ou un retrait ne détruit jamais une composition, retouchée sur place peut-être.
+# Avec NEUVE, rien n'est gardé si les deux sont identiques : il n'y a rien à perdre. Rend 1 si le
+# rangement échoue, ANCIENNE restant alors où elle est.
+garde_ancienne() {
+    local nom="$1" anc="$2" neuve="${3:-}" cible
+    [ -d "$anc" ] || return 0
+    if [ -n "$neuve" ] && diff -rq "$anc" "$neuve" >/dev/null 2>&1; then
+        rm -rf "$anc"; return 0
+    fi
+    cible="$CIBLE/cache/compositions-remplacees/$nom-$(date +%Y%m%d-%H%M%S)"
+    [ -e "$cible" ] && cible="$cible-$$"
+    if mkdir -p "$(dirname "$cible")" && mv "$anc" "$cible"; then
+        dit "ancienne composition de skills/$nom/ gardée sous cache/compositions-remplacees/$(basename "$cible")/"
+        return 0
+    fi
+    crie "⚠ skills/$nom/ : l'ancienne composition n'a pas pu être rangée, elle reste sous $anc"
+    return 1
+}
+
 compose() {
     local nom="$1" dest="$SKILLS/$1" tmp
     lit_ligne "$nom"
@@ -243,6 +263,7 @@ compose() {
         [ -e "$tmp/ancien" ] && mv "$tmp/ancien" "$dest"
         crie "⛔ skills/$nom/ : la composition neuve ne prend pas sa place, l'ancienne est remise"; rm -rf "$tmp"; return 4
     fi
+    garde_ancienne "$nom" "$tmp/ancien" "$dest" || return 1
     rm -rf "$tmp"
     dit "✅ skills/$nom/ — $DEPOT au commit ${COMMIT:0:7}$([ "$VOISINS" != - ] && printf ', voisins %s' "$VOISINS")"
     return 0
@@ -281,7 +302,7 @@ verifie() {
     ecarts="$(diff -rq "$tmp/neuf" "$dest" 2>&1 | grep -v '\.DS_Store' || true)"
     rm -rf "$tmp"
     if [ -n "$ecarts" ]; then
-        crie "⛔ skills/$nom/ diffère de sa composition au commit ${COMMIT:0:7} — retouchée sur place, elle se perdra à la recomposition :"
+        crie "⛔ skills/$nom/ diffère de sa composition au commit ${COMMIT:0:7} — retouchée sur place : la recomposition la remplacera, l'ancienne rangée sous cache/compositions-remplacees/ ; une retouche durable va dans gabarits/skills/$nom/SURCOUCHE.md :"
         printf '%s\n' "$ecarts" | sed "s#$tmp/neuf#composition#g; s#$dest#skills/$nom#g; s/^/    /" >&2
         return 1
     fi
@@ -323,7 +344,7 @@ if [ "$MODE" = vrai ]; then
         d="$SKILLS/$nom"
         [ -e "$d" ] || continue
         if [ -f "$d/$MARQUE" ]; then
-            if rm -rf "$d"; then
+            if garde_ancienne "$nom" "$d"; then
                 dit "retiré : skills/$nom/, absent de SKILLS_OPTION"
             else
                 crie "⚠ skills/$nom/ non retiré"; [ "$RC" -eq 0 ] && RC=1

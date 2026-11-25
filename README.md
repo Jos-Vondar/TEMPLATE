@@ -18,6 +18,25 @@ plutôt que dans une configuration au niveau de l'utilisateur, invisible et qui 
 Chaque amélioration du modèle profite à toutes les installations à la mise à jour suivante, sans
 formation.
 
+## Démarrage rapide
+
+Pour une installation en régime GitHub, le choix par défaut :
+
+1. Cliquez sur « Use this template » et créez le dépôt en **privé**.
+2. Clonez-le, puis lancez l'agent :
+
+   ```
+   gh repo clone <votre-compte>/<votre-depot> ~/claudeos-amorce
+   bash ~/claudeos-amorce/lancer.sh
+   ```
+
+3. Répondez à l'agent. Il vérifie les prérequis, présente le système, l'installe, puis conduit
+   l'entretien qui fixe votre règlement.
+
+Pour passer plus tard à une nouvelle version : `bash ~/.claude/lancer.sh`. Les prérequis, les deux
+autres régimes et le détail de chaque étape suivent.
+
+- [Démarrage rapide](#démarrage-rapide)
 - [Partie 1 — Installer](#partie-1--installer)
 - [Partie 2 — Mettre à jour](#partie-2--mettre-à-jour)
 
@@ -96,9 +115,11 @@ curl -L https://github.com/Jos-Vondar/TEMPLATE/archive/refs/tags/<version>.tar.g
 ### Lancer l'agent
 
 ```
-cd ~/claudeos-amorce
-claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur
+bash ~/claudeos-amorce/lancer.sh
 ```
+
+Le lanceur exécute, depuis le dossier qui le porte,
+`claude --settings installateur/settings.installation.json --permission-mode auto --effort high --agent claudeos-installateur`.
 
 En mode auto, un classificateur de Claude Code évalue les actions de l'agent, et
 `installateur/settings.installation.json` autorise par avance les scripts du moteur qu'il exécute.
@@ -107,6 +128,12 @@ dans `~/.claude`, que Claude Code n'approuve jamais de lui-même. Elles sont à 
 ce dossier que l'agent installe le système. Si votre organisation a désactivé le mode auto, ou si
 votre modèle ne le prend pas en charge, Claude Code démarre en mode Manual : chaque commande demande
 alors votre accord.
+
+Le lanceur fait raisonner l'agent davantage que le niveau par défaut (`--effort high`), pour cette
+session seulement : vos réglages ne changent pas. Une installation et une mise à jour s'appuient sur
+votre système tel que vous l'avez modifié, et c'est là qu'un raisonnement plus poussé évite des
+erreurs. Si vos limites d'usage le permettent, `bash ~/claudeos-amorce/lancer.sh xhigh` va plus
+loin ; `/effort`, tapé dans la session, change le niveau en cours de route.
 
 Au moment de la plomberie, l'agent vous communique une ligne à ajouter à votre `~/.zshrc`, ou à
 votre `~/.bashrc` sous WSL : à chaque `claude` tapé seul, elle tire vos dépôts et ouvre la session
@@ -138,8 +165,7 @@ Relancez l'agent pour reprendre là où l'installation s'est arrêtée : depuis 
 l'avez supprimée, depuis votre système :
 
 ```
-cd ~/.claude
-claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur
+bash ~/.claude/lancer.sh
 ```
 
 ### La sauvegarde a lieu à la clôture
@@ -188,7 +214,10 @@ Les versions sont des étiquettes de ce dépôt. Pour passer à une nouvelle ver
 il identifie votre régime et conduit la mise à jour.
 
 - **En régime GitHub**, depuis votre système :
-  `cd ~/.claude && claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur`.
+  `bash ~/.claude/lancer.sh`.
+  Depuis une version antérieure à la 3.2.0, le lanceur n'est pas encore dans votre système : lancez
+  cette fois
+  `cd ~/.claude && claude --settings installateur/settings.installation.json --permission-mode auto --effort high --agent claudeos-installateur`.
   L'agent fusionne la version par git depuis ce dépôt, déclaré comme `upstream` à l'installation, et
   résout avec vous tout conflit portant sur un fichier que vous avez modifié.
 - **Sans git**, extrayez l'archive de la nouvelle version dans une amorce neuve, comme décrit dans

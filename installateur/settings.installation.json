@@ -10,6 +10,20 @@
       "Bash(bash engine/*)",
       "Bash(python3 ~/.claude/engine/*)",
       "Bash(bash ~/.claude/engine/*)"
+    ],
+    "deny": [
+      "Bash(rm *)",
+      "Bash(*/rm *)",
+      "Bash(git rm *)",
+      "Bash(git * rm *)",
+      "Bash(git clean *)",
+      "Bash(git * clean *)",
+      "Bash(git reset --hard*)",
+      "Bash(git * reset --hard*)",
+      "Bash(git checkout -- *)",
+      "Bash(git * checkout -- *)",
+      "Bash(git restore *)",
+      "Bash(git * restore *)"
     ]
   }
 }

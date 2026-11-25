@@ -402,6 +402,26 @@ def autotest():
             echecs.append("fil reformulé : l'âge de u-temoin-tilde reste marqué INFÉRÉ alors "
                           "qu'une origine explicite a été posée")
 
+        # 10. POINTEUR DONT LA DERNIÈRE VERSION VIT DANS UN CHANTIER FERMÉ. Filtrer le chantier AVANT
+        #    de prendre la dernière version par ref fait revenir une version ANTÉRIEURE, rangée
+        #    ailleurs : un pointeur périmé ressort dans « Où trouver » sans un mot. Attendu : absent.
+        joues += 1
+        _evs3 = [
+            {"ts": "2026-01-01T09:00:00+01:00", "id": "e-ptr-0001-aaaa", "niveau": ".",
+             "poste": "autotest", "type": "pointeur", "op": "ajoute", "ref": "p-temoin-ferme",
+             "texte": "version ancienne sans chantier", "source": "engine/etat.py"},
+            {"ts": "2026-01-02T09:00:00+01:00", "id": "e-ptr-0002-bbbb", "niveau": ".",
+             "poste": "autotest", "type": "pointeur", "op": "ajoute", "ref": "p-temoin-ferme",
+             "chantier": "chantier-temoin", "texte": "version neuve", "source": "engine/etat.py"},
+            {"ts": "2026-01-03T09:00:00+01:00", "id": "e-ptr-0003-cccc", "niveau": ".",
+             "poste": "autotest", "type": "etat", "op": "ferme", "chantier": "chantier-temoin",
+             "texte": "chantier clos"},
+        ]
+        _ptrs = [e.get("ref") for e in etat.projection_vivante(_evs3)[2]]
+        if "p-temoin-ferme" in _ptrs:
+            echecs.append("pointeur : la dernière version vit dans un chantier FERMÉ, et une "
+                          "version antérieure rangée ailleurs est REVENUE dans la projection")
+
     if echecs:
         print(f"[etat] autotest : {len(echecs)} ÉCHEC(S) sur {joues} op exercées", file=sys.stderr)
         for e in echecs:

@@ -274,7 +274,7 @@ de session. La reprise au fil de l'eau et la clôture sont la compétence `repri
 2. Dis ce qui a été écrit, et où : `reglages/REPONSES`, le `CLAUDE.md` — persona, domaines, règles,
    bloc d'imports —, les compétences composées et le journal du système.
 3. Dis que l'entretien se rejoue quand la situation change : `/claudeos-onboarding`, ou l'agent
-   livré, `cd ~/.claude && claude --settings installateur/settings.installation.json --permission-mode auto --agent claudeos-installateur`.
+   livré, `bash ~/.claude/lancer.sh`.
 4. **En mode installation**, reviens à `INSTALLER.md`, I7. **En mode rejouer**, ce qui a changé
    partira à la prochaine clôture.
 

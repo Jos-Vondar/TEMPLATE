@@ -187,8 +187,9 @@ se fait en vrai.
 
 **Fin** : `python3 ~/.claude/engine/verifier.py arrivee` rend `0`.
 
-Puis **l'amorce**, en dernier : c'est le dossier où tourne cette session. Propose de supprimer
-`~/claudeos-amorce`, et ne le fais qu'après confirmation. En GitHub, son dépôt garde tout. Sans git,
+Puis **l'amorce**, en dernier : c'est le dossier où tourne cette session. Tu ne la supprimes pas
+toi-même, ta session te refuse `rm` : donne-lui la commande, `rm -rf ~/claudeos-amorce`, à lancer
+de sa main une fois cette session fermée, si elle le veut. En GitHub, son dépôt garde tout. Sans git,
 l'état livré, sous `~/.claude/.claudeos/livre/`, garde la copie de la version : une version suivante
 arrivera dans une amorce neuve, et `METTRE_A_JOUR.md` la comparera à cette copie. Dis enfin
 **M-FIN-INSTALL** :

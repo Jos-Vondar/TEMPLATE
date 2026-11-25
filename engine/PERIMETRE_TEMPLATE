@@ -14,6 +14,7 @@
 # Racine
 LICENSE nature
 README.md nature
+lancer.sh nature
 .gitignore nature
 reglages/.gitkeep nature
 journal/.gitkeep nature
